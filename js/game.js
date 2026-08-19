@@ -297,6 +297,7 @@ const game = {
   gold: 300,                   // 初始金币：够建 3 座塔
   lives: 10,                   // 基地生命值：漏一只怪扣 1 点
   state: "playing",            // 游戏状态：playing / won / lost
+  stars: 0,                    // 胜利时的星级评价（1~3 星）
   selected_tower_type: "basic",// 当前选中的塔型（在塔仓面板点选）
   wave_index: 0,               // 当前第几波（0 开始）
   spawn_remaining: 0,          // 本波还剩几只没出场
@@ -322,12 +323,23 @@ function restart_game() {
   game.gold = 300;
   game.lives = 10;
   game.state = "playing";
+  game.stars = 0;
   game.wave_index = 0;
   game.spawn_remaining = 0;
   game.spawn_timer = 0;
   game.spawn_gap_index = 0;
   game.wave_break_timer = 0;
   start_wave(WAVES[0]);
+}
+
+// 按剩余生命计算星级（胜利时结算）
+//   剩余 ≥ 10：⭐⭐⭐ 完美防御（一个都没漏）
+//   剩余 6~9：⭐⭐ 有惊无险
+//   剩余 1~5：⭐ 险胜
+function compute_stars() {
+  if (game.lives >= 10) return 3;
+  if (game.lives >= 6) return 2;
+  return 1;
 }
 
 // 更新游戏状态（每帧调用一次）
@@ -363,7 +375,8 @@ function update_game(delta_time) {
         if (game.wave_index < WAVES.length) {
           start_wave(WAVES[game.wave_index]);
         } else {
-          game.state = "won";   // 所有波次打完：胜利！
+          game.state = "won";             // 所有波次打完：胜利！
+          game.stars = compute_stars();   // 按剩余生命结算星级
         }
       }
     }

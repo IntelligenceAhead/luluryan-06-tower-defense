@@ -313,7 +313,7 @@ function draw_hud() {
 }
 
 // ============ 图层9：胜负结算画面 ============
-// 游戏结束时：半透明遮罩 + 大字结果 + 重新开始提示
+// 游戏结束时：半透明遮罩 + 大字结果 + 星级 + 重新开始提示
 function draw_game_over() {
   if (game.state === "playing") return;
 
@@ -323,12 +323,27 @@ function draw_game_over() {
 
   ctx.textAlign = "center";
   ctx.fillStyle = "#111111";
-  ctx.font = "bold 48px sans-serif";
-  ctx.fillText(game.state === "won" ? "🎉 游戏胜利！" : "💀 游戏失败", canvas.width / 2, canvas.height / 2 - 20);
 
-  ctx.font = "20px sans-serif";
-  ctx.fillStyle = "#555555";
-  ctx.fillText("点击画面重新开始", canvas.width / 2, canvas.height / 2 + 30);
+  if (game.state === "won") {
+    // 胜利：大字 + 星级（★★☆ 形式，实心星 = 得到，空心星 = 失去）
+    ctx.font = "bold 48px sans-serif";
+    ctx.fillText("🎉 游戏胜利！", canvas.width / 2, canvas.height / 2 - 30);
+    ctx.font = "36px sans-serif";
+    ctx.fillText(
+      "★★★".slice(0, game.stars) + "☆☆☆".slice(0, 3 - game.stars),
+      canvas.width / 2,
+      canvas.height / 2 + 25
+    );
+    ctx.font = "20px sans-serif";
+    ctx.fillStyle = "#555555";
+    ctx.fillText("点击画面重新开始", canvas.width / 2, canvas.height / 2 + 65);
+  } else {
+    ctx.font = "bold 48px sans-serif";
+    ctx.fillText("💀 游戏失败", canvas.width / 2, canvas.height / 2 - 20);
+    ctx.font = "20px sans-serif";
+    ctx.fillStyle = "#555555";
+    ctx.fillText("点击画面重新开始", canvas.width / 2, canvas.height / 2 + 30);
+  }
 }
 
 // ============ 工具函数 ============
