@@ -250,14 +250,20 @@ function place_tower(col, row) {
 }
 
 // ============ 波次配置 ============
-// 每波一条记录：怪物的数量、出怪间隔、以及怪物属性。
-// 难度设计：逐波小步增强（数量↑、间隔↓、血量↑、速度↑），不突变。
+// 每波一条记录：怪物数量、出怪节奏（gaps）、怪物属性。
+//
+// gaps = "出怪节奏表"：出完一只怪后，等多少秒出下一只。
+// 一个数字 = 均匀节奏（无聊）；一串数字 = 有起伏的节奏（有趣）。
+// 如 [1.2, 0.3, 0.3] 表示：等 1.2 秒 → 两只连着冲出来（间隔仅 0.3 秒）→ 循环。
+// 这样敌人会结成"小团伙"进攻，玩家要应对突发压力。
+//
+// 难度设计：逐波小步增强（数量↑、团伙变大、血量↑、速度↑），不突变。
 const WAVES = [
-  { enemies: 3,  interval: 1.5, hp: 100, speed: 80, reward: 50 },   // 第1波：热身
-  { enemies: 5,  interval: 1.2, hp: 100, speed: 80, reward: 50 },   // 第2波：数量变多
-  { enemies: 8,  interval: 1.0, hp: 120, speed: 85, reward: 50 },   // 第3波：血变厚
-  { enemies: 10, interval: 0.8, hp: 150, speed: 90, reward: 55 },   // 第4波：来得更密
-  { enemies: 12, interval: 0.7, hp: 180, speed: 95, reward: 60 },   // 第5波：全面加压
+  { enemies: 3,  gaps: [1.5],                          hp: 100, speed: 80, reward: 50 },   // 第1波：热身，均匀出怪
+  { enemies: 5,  gaps: [1.2, 0.4, 0.4],                hp: 100, speed: 80, reward: 50 },   // 第2波：双人小团伙
+  { enemies: 8,  gaps: [1.2, 0.3, 0.3, 1.2],           hp: 120, speed: 85, reward: 50 },   // 第3波：双人团伙，循环
+  { enemies: 10, gaps: [1.0, 0.25, 0.25, 0.25, 1.5],   hp: 150, speed: 90, reward: 55 },   // 第4波：三人团伙
+  { enemies: 12, gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4], hp: 180, speed: 95, reward: 60 },   // 第5波：四人长队突击
 ];
 const WAVE_BREAK_SECONDS = 3;   // 波次之间的休息秒数
 
@@ -272,6 +278,7 @@ const game = {
   wave_index: 0,               // 当前第几波（0 开始）
   spawn_remaining: 0,          // 本波还剩几只没出场
   spawn_timer: 0,              // 距离下一次出怪还剩多少秒
+  spawn_gap_index: 0,          // 现在轮到节奏表（gaps）里的第几个间隔
   wave_break_timer: 0,         // 波次间休息计时
   hover_cell: null,            // 鼠标悬停的格子（界面预览用，暂存在这）
   last_time: 0,                // 上一帧的时间戳（用来算时间差）
@@ -280,7 +287,8 @@ const game = {
 // 开始一波：设定本波要出多少只怪
 function start_wave(wave) {
   game.spawn_remaining = wave.enemies;
-  game.spawn_timer = 0;   // 第一只立刻出场
+  game.spawn_timer = 0;         // 第一只立刻出场
+  game.spawn_gap_index = 0;     // 从节奏表的第一个间隔开始
 }
 
 // 重置游戏（重新开始一局）
@@ -294,6 +302,7 @@ function restart_game() {
   game.wave_index = 0;
   game.spawn_remaining = 0;
   game.spawn_timer = 0;
+  game.spawn_gap_index = 0;
   game.wave_break_timer = 0;
   start_wave(WAVES[0]);
 }
@@ -312,12 +321,15 @@ function update_game(delta_time) {
   if (game.wave_index < WAVES.length) {
     const wave = WAVES[game.wave_index];
     if (game.spawn_remaining > 0) {
-      // 本波还有怪没出场：按间隔计时出怪
+      // 本波还有怪没出场：按节奏表（gaps）计时出怪
       game.spawn_timer -= dt;
       if (game.spawn_timer <= 0) {
         game.enemies.push(create_enemy(wave));
         game.spawn_remaining--;
-        game.spawn_timer = wave.interval;
+        // 取节奏表里"下一个"间隔，取完一轮回到开头（用 % 取余实现循环）
+        const gap = wave.gaps[game.spawn_gap_index % wave.gaps.length];
+        game.spawn_gap_index++;
+        game.spawn_timer = gap;
       }
     } else if (game.enemies.length === 0) {
       // 本波出完且场上清空：休息几秒，然后进下一波
