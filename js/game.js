@@ -107,6 +107,7 @@ function create_enemy(stats) {
     hp: stats.hp,
     max_hp: stats.hp,
     reward: stats.reward,
+    slow_factor: 1,      // 减速光环作用时的速度倍率（1 = 正常速度）
   };
 }
 
@@ -152,18 +153,36 @@ function path_total_length() {
   return total;
 }
 
-// ============ 塔 ============
-const TOWER_COST = 100;   // 建造一座塔要花 100 金币
+// ============ 塔的类型表 ============
+// 5 种塔，每种一个"定位"（设计目标：能力差异化，互不重复）。
+// 塔本身只存"位置 + 类型"，所有数值都查这张表 ——
+// 以后调平衡只改这张表，代码不用动。这就是数据驱动。
+const TOWER_TYPES = [
+  // 基础炮塔：单体均衡，最便宜，开局主力
+  { id: "basic",  icon: "🎯", name: "基础炮塔", cost: 100, damage: 20,  fire_interval: 0.5,  range: 2.2, desc: "单体均衡，开局主力" },
+  // 速射塔：攻速极快但单发伤害低，克制脆皮快跑的怪
+  { id: "rapid",  icon: "⚡", name: "速射塔",   cost: 120, damage: 6,   fire_interval: 0.17, range: 2.0, desc: "每秒6发，克制脆皮" },
+  // 狙击塔：慢攻速、高伤害、远射程，一枪一个坦克怪
+  { id: "sniper", icon: "🔭", name: "狙击塔",   cost: 200, damage: 100, fire_interval: 2.5,  range: 3.5, desc: "慢而狠，一枪秒杀" },
+  // 减速塔：不造成伤害，让射程内的怪速度减半（光环效果）
+  { id: "frost",  icon: "❄️", name: "减速塔",   cost: 80,  slow_factor: 0.5,                 range: 2.0, desc: "无伤害，减速50%" },
+  // 溅射塔：命中时对落点周围的怪都造成伤害，克制团伙
+  { id: "splash", icon: "💥", name: "溅射塔",   cost: 150, damage: 15,  fire_interval: 1.0,  range: 2.0, splash_radius: 1.0, desc: "范围伤害，克制团伙" },
+];
 
-function create_tower(col, row) {
+// 塔只记录"位置 + 类型 + 冷却"，具体属性查类型表（避免数据存两份）
+function create_tower(col, row, type_id) {
   return {
     col: col,
     row: row,
-    range: 2.2,           // 射程（格子数）
-    damage: 20,           // 每发子弹的伤害
-    fire_interval: 0.5,   // 两次开火的间隔（秒）→ 每秒 2 发
+    type_id: type_id,
     cooldown: 0,          // 距离下次开火还剩多少秒（≤0 表示可以开火）
   };
+}
+
+// 查塔的类型数据
+function tower_type(tower) {
+  return TOWER_TYPES.find(function (t) { return t.id === tower.type_id; });
 }
 
 // 塔的像素坐标（格子中心）
@@ -195,7 +214,7 @@ function nearest_enemy(tower) {
 // 如果只按格子数近似，就会出现"圈外挨打"或"圈内不打"的视觉矛盾。
 function enemy_in_range(tower) {
   const pos = tower_position(tower);
-  const range_px = tower.range * GRID.cell;
+  const range_px = tower_type(tower).range * GRID.cell;
   let best = null;
   let best_dist = Infinity;
   for (const enemy of game.enemies) {
@@ -213,13 +232,15 @@ function enemy_in_range(tower) {
 // 子弹是"追踪弹"：记下目标怪物，每帧朝它的当前位置飞。
 function create_bullet(tower, target) {
   const pos = tower_position(tower);
+  const type = tower_type(tower);
   return {
     x: pos.x,
     y: pos.y,
-    target: target,      // 追踪哪只怪物
-    speed: 260,          // 每秒 260 像素
-    damage: tower.damage,// 命中时造成的伤害（由塔决定）
-    hit: false,          // 是否已命中（命中后子弹消失）
+    target: target,                  // 追踪哪只怪物
+    speed: 260,                      // 每秒 260 像素
+    damage: type.damage,             // 命中时造成的伤害（由塔型决定）
+    splash_radius: type.splash_radius || 0,   // 溅射半径（格），0 = 无溅射
+    hit: false,                      // 是否已命中（命中后子弹消失）
   };
 }
 
@@ -239,13 +260,14 @@ function place_tower(col, row) {
   if (game.towers.some(function (t) { return t.col === col && t.row === row; })) {
     return "这里已经有塔了";
   }
-  // 规则4：钱要够（经济系统的第一条规则）
-  if (game.gold < TOWER_COST) {
-    return "金币不足：建塔需要 " + TOWER_COST + " 金币，当前只有 " + game.gold;
+  // 规则4：钱要够（按当前选中的塔型造价判断）
+  const type = TOWER_TYPES.find(function (t) { return t.id === game.selected_tower_type; });
+  if (game.gold < type.cost) {
+    return "金币不足：" + type.name + " 需要 " + type.cost + " 金币，当前只有 " + game.gold;
   }
   // 全部通过：扣钱 + 建造！
-  game.gold -= TOWER_COST;
-  game.towers.push(create_tower(col, row));
+  game.gold -= type.cost;
+  game.towers.push(create_tower(col, row, type.id));
   return null;
 }
 
@@ -275,6 +297,7 @@ const game = {
   gold: 300,                   // 初始金币：够建 3 座塔
   lives: 10,                   // 基地生命值：漏一只怪扣 1 点
   state: "playing",            // 游戏状态：playing / won / lost
+  selected_tower_type: "basic",// 当前选中的塔型（在塔仓面板点选）
   wave_index: 0,               // 当前第几波（0 开始）
   spawn_remaining: 0,          // 本波还剩几只没出场
   spawn_timer: 0,              // 距离下一次出怪还剩多少秒
@@ -347,9 +370,25 @@ function update_game(delta_time) {
   }
 
   // 2. 怪物移动。走到出口 = 漏怪：扣生命值，怪物消失
+  //    移动前先结算"减速光环"：站在减速塔射程里的怪，速度倍率降为 0.5
+  for (const enemy of game.enemies) {
+    enemy.slow_factor = 1;   // 每帧先恢复为正常速度
+  }
+  for (const tower of game.towers) {
+    const type = tower_type(tower);
+    if (!type.slow_factor) continue;   // 不是减速塔
+    const pos = tower_position(tower);
+    const range_px = type.range * GRID.cell;
+    for (const enemy of game.enemies) {
+      const ep = enemy_position(enemy);
+      if (Math.hypot(ep.x - pos.x, ep.y - pos.y) <= range_px) {
+        enemy.slow_factor = type.slow_factor;
+      }
+    }
+  }
   const alive = [];
   for (const enemy of game.enemies) {
-    enemy.distance += enemy.speed * dt;
+    enemy.distance += enemy.speed * enemy.slow_factor * dt;   // 实际速度 = 基础速度 × 减速倍率
     if (enemy.distance >= path_total_length()) {
       game.lives -= 1;
       if (game.lives <= 0) {
@@ -364,12 +403,14 @@ function update_game(delta_time) {
   // 3. 塔自动开火
   //    每个塔有一个"冷却计时器"：时间一到，只要射程内有怪物就射一发
   for (const tower of game.towers) {
+    const type = tower_type(tower);
+    if (type.slow_factor) continue;                // 减速塔不发射子弹（靠光环减速）
     tower.cooldown -= dt;
     if (tower.cooldown > 0) continue;              // 还没到开火时间
     const target = enemy_in_range(tower);          // 射程内最近的怪物
     if (!target) continue;                         // 没有目标，继续等
     game.bullets.push(create_bullet(tower, target));
-    tower.cooldown = tower.fire_interval;          // 重置冷却
+    tower.cooldown = type.fire_interval;           // 重置冷却（间隔由塔型决定）
   }
 
   // 4. 子弹飞行（追踪弹：每帧朝目标的当前位置飞）
@@ -382,6 +423,17 @@ function update_game(delta_time) {
     if (dist <= step) {
       // 足够飞到了：命中！
       bullet.target.hp -= bullet.damage;
+      // 溅射：对落点周围 splash_radius 格内的其他怪也造成伤害
+      if (bullet.splash_radius > 0) {
+        const radius_px = bullet.splash_radius * GRID.cell;
+        for (const other of game.enemies) {
+          if (other === bullet.target) continue;   // 主目标已受伤，跳过
+          const op = enemy_position(other);
+          if (Math.hypot(op.x - tp.x, op.y - tp.y) <= radius_px) {
+            other.hp -= bullet.damage;
+          }
+        }
+      }
       bullet.hit = true;
     } else {
       // 还没到：朝目标方向移动 step 距离

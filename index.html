@@ -15,9 +15,18 @@
   <main>
     <!-- 游戏画布：所有画面都在这里绘制 -->
     <canvas id="gameCanvas" width="960" height="576"></canvas>
-    <!-- 状态栏：显示建塔结果（成功/失败原因） -->
-    <p id="statusMessage" class="hint">🖱️ 点击空地建造炮塔（100 金币） · 守住 5 波进攻 · 漏怪扣生命 · 生命归零游戏失败</p>
+
+    <!-- 塔仓面板：游戏区外，显示 5 种塔供点选（卡片由 render.js 自动生成） -->
+    <aside id="shopPanel">
+      <h2>🗼 塔仓</h2>
+      <div id="goldDisplay" class="gold">💰 金币：300</div>
+      <div id="towerCards"></div>
+      <p class="hint">点击卡片选择塔型（或按键盘 1~5），再点击地图空地建造</p>
+    </aside>
   </main>
+
+  <!-- 状态栏：显示建塔结果（成功/失败原因） -->
+  <p id="statusMessage" class="hint">🖱️ 选择塔型后点击空地建造 · 守住 5 波进攻 · 漏怪扣生命</p>
 
   <!-- 注意加载顺序：先逻辑（game.js），再美术（render.js） -->
   <script src="js/game.js"></script>

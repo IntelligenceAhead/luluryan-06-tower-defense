@@ -121,17 +121,18 @@ function draw_towers() {
   }
 }
 
-// 黑白线条版炮塔：半透明射程圈 + 底座圆 + 内圈 + 炮管
+// 黑白线条版炮塔：射程圈 + 底座 + 按塔型画不同的"武器部分"
 function draw_tower(tower) {
+  const type = tower_type(tower);
   const cx = (tower.col + 0.5) * GRID.cell;
   const cy = (tower.row + 0.5) * GRID.cell;
 
   ctx.save();
   ctx.translate(cx, cy);
 
-  // 射程圈：半透明灰圆。怪物走进这个圆才会被打（第3步实现攻击）
+  // 射程圈：半透明灰圆。怪物走进这个圆才会被打/被减速
   ctx.beginPath();
-  ctx.arc(0, 0, tower.range * GRID.cell, 0, Math.PI * 2);
+  ctx.arc(0, 0, type.range * GRID.cell, 0, Math.PI * 2);
   ctx.fillStyle = "rgba(0, 0, 0, 0.06)";
   ctx.fill();
   ctx.strokeStyle = "rgba(0, 0, 0, 0.25)";
@@ -142,7 +143,7 @@ function draw_tower(tower) {
   ctx.fillStyle = "#ffffff";
   ctx.lineWidth = 2;
 
-  // 底座（大圆）
+  // 底座（大圆）——所有塔都一样
   ctx.beginPath();
   ctx.arc(0, 0, 14, 0, Math.PI * 2);
   ctx.fill();
@@ -153,27 +154,73 @@ function draw_tower(tower) {
   ctx.arc(0, 0, 7, 0, Math.PI * 2);
   ctx.stroke();
 
-  // 炮管：自动指向最近的怪物。
-  // 角度计算：atan2(垂直差, 水平差) —— 两点连线与水平方向的夹角
-  const target = nearest_enemy(tower);          // 逻辑层负责找目标
-  let barrel_angle = -Math.PI / 4;              // 没有目标时，默认朝右上
-  if (target) {
-    const tp = enemy_position(target);
-    barrel_angle = Math.atan2(tp.y - cy, tp.x - cx);
+  if (type.id === "frost") {
+    // 减速塔：六角雪花，静止（不需要瞄准）
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI / 3) * i;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle) * 4, Math.sin(angle) * 4);
+      ctx.lineTo(Math.cos(angle) * 12, Math.sin(angle) * 12);
+      ctx.stroke();
+    }
+  } else {
+    // 有炮管的塔：自动指向最近的怪物。
+    // 角度计算：atan2(垂直差, 水平差) —— 两点连线与水平方向的夹角
+    const target = nearest_enemy(tower);
+    let barrel_angle = -Math.PI / 4;              // 没有目标时，默认朝右上
+    if (target) {
+      const tp = enemy_position(target);
+      barrel_angle = Math.atan2(tp.y - cy, tp.x - cx);
+    }
+    ctx.rotate(barrel_angle);
+
+    if (type.id === "rapid") {
+      // 速射塔：两根短细炮管，呈八字
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(16, -5);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(16, 5);
+      ctx.stroke();
+    } else if (type.id === "sniper") {
+      // 狙击塔：一根超长细炮管
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(30, 0);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(30, 0, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else if (type.id === "splash") {
+      // 溅射塔：短粗炮管
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(14, 0);
+      ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(14, 0, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      // 基础炮塔：标准炮管
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(22, 0);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(22, 0, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
   }
-  ctx.rotate(barrel_angle);                     // 旋转画布，让炮管对准目标
-
-  // 炮管（旋转后沿 +x 方向画）
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(22, 0);
-  ctx.stroke();
-
-  // 炮口（小圆）
-  ctx.beginPath();
-  ctx.arc(22, 0, 3, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
 
   ctx.restore();
 }
@@ -234,17 +281,23 @@ function draw_enemy(enemy) {
   ctx.strokeRect(bar_x - 1, bar_y - 1, bar_w + 2, bar_h + 2);
   ctx.fillStyle = "#111111";
   ctx.fillRect(bar_x, bar_y, bar_w * hp_ratio, bar_h);
+
+  // 减速标记：被减速时头顶出现小雪花
+  if (enemy.slow_factor < 1) {
+    ctx.font = "14px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("❄", pos.x, pos.y - 30);
+  }
 }
 
 // ============ 图层8：信息栏（HUD） ============
-// 顶部信息：金币、生命值、波次进度
+// 顶部信息：生命值、波次进度（金币已移到右侧塔仓面板）
 function draw_hud() {
   ctx.fillStyle = "#111111";
   ctx.font = "bold 16px sans-serif";
   ctx.textAlign = "left";
-  ctx.fillText("💰 金币：" + game.gold, 12, 24);
-  ctx.fillText("❤️ 生命：" + game.lives, 160, 24);
-  ctx.fillText("🌊 波次：" + (game.wave_index + 1) + "/" + WAVES.length, 290, 24);
+  ctx.fillText("❤️ 生命：" + game.lives, 12, 24);
+  ctx.fillText("🌊 波次：" + (game.wave_index + 1) + "/" + WAVES.length, 150, 24);
 
   // 波次之间的休息倒计时提示
   const between_waves =
@@ -296,6 +349,54 @@ function event_to_canvas(event) {
   };
 }
 
+// ============ 塔仓面板（DOM 界面） ============
+// 游戏区外的"仓库"：显示 5 种塔，鼠标点选，再回地图上建造。
+const shop_cards_container = document.getElementById("towerCards");
+const gold_display = document.getElementById("goldDisplay");
+
+// 启动时按 TOWER_TYPES 表生成 5 张卡片。
+// 数据驱动：以后加第 6 种塔 = 表里加一行，卡片自动出现。
+function build_shop() {
+  TOWER_TYPES.forEach(function (type) {
+    const card = document.createElement("div");
+    card.className = "tower-card";
+    card.id = "card-" + type.id;
+    card.innerHTML =
+      '<div class="card-icon">' + type.icon + "</div>" +
+      '<div class="card-name">' + type.name + "</div>" +
+      '<div class="card-cost">💰 ' + type.cost + " 金币</div>" +
+      '<div class="card-desc">' + type.desc + "</div>";
+    card.addEventListener("click", function () {
+      game.selected_tower_type = type.id;
+      refresh_shop();
+      status_text.textContent = "🖱️ 已选择「" + type.name + "」，点击地图空地建造";
+    });
+    shop_cards_container.appendChild(card);
+  });
+  refresh_shop();
+}
+
+// 刷新面板：选中态高亮、金币显示、买不起的卡片变灰
+function refresh_shop() {
+  gold_display.textContent = "💰 金币：" + game.gold;
+  TOWER_TYPES.forEach(function (type) {
+    const card = document.getElementById("card-" + type.id);
+    card.classList.toggle("selected", type.id === game.selected_tower_type);
+    card.classList.toggle("disabled", game.gold < type.cost);
+  });
+}
+build_shop();
+
+// 键盘快捷键：1~5 直接选择对应塔型
+document.addEventListener("keydown", function (event) {
+  const index = parseInt(event.key, 10) - 1;   // 1~5 → 0~4
+  if (index >= 0 && index < TOWER_TYPES.length) {
+    game.selected_tower_type = TOWER_TYPES[index].id;
+    refresh_shop();
+    status_text.textContent = "⌨️ 已选择「" + TOWER_TYPES[index].name + "」";
+  }
+});
+
 // ============ 鼠标交互 ============
 
 // 移动：记录悬停的格子（供每帧的预览高亮使用）
@@ -328,8 +429,9 @@ canvas.addEventListener("click", function (event) {
   const row = Math.floor(pos.y / GRID.cell);
 
   const error = place_tower(col, row);   // 逻辑层负责判断能不能建
+  const type = TOWER_TYPES.find(function (t) { return t.id === game.selected_tower_type; });
   if (error === null) {
-    status_text.textContent = "✅ 炮塔建造完成（花费 " + TOWER_COST + " 金币，剩余 " + game.gold + "）";
+    status_text.textContent = "✅ " + type.name + "建造完成（花费 " + type.cost + " 金币，剩余 " + game.gold + "）";
   } else {
     status_text.textContent = "❌ " + error;
   }
@@ -344,6 +446,7 @@ function game_loop(now) {
 
   update_game(delta_time);   // 先算（逻辑）
   draw();                    // 再画（美术）
+  refresh_shop();            // 再刷新塔仓面板（金币变了、卡片选中态）
 
   requestAnimationFrame(game_loop);
 }
