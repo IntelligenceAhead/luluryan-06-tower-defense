@@ -30,6 +30,7 @@ function draw() {
     draw_enemy(enemy);   // 怪物画在最上层，走路时"路过"塔
   }
   draw_hud();            // 顶部信息栏：金币等（永远在最上层）
+  draw_game_over();      // 胜负结算画面（游戏结束时显示）
 }
 
 // ============ 图层1：背景 ============
@@ -236,12 +237,45 @@ function draw_enemy(enemy) {
 }
 
 // ============ 图层8：信息栏（HUD） ============
-// 顶部信息：金币数量。以后关卡、生命值也会画在这里
+// 顶部信息：金币、生命值、波次进度
 function draw_hud() {
   ctx.fillStyle = "#111111";
   ctx.font = "bold 16px sans-serif";
   ctx.textAlign = "left";
   ctx.fillText("💰 金币：" + game.gold, 12, 24);
+  ctx.fillText("❤️ 生命：" + game.lives, 160, 24);
+  ctx.fillText("🌊 波次：" + (game.wave_index + 1) + "/" + WAVES.length, 290, 24);
+
+  // 波次之间的休息倒计时提示
+  const between_waves =
+    game.state === "playing"
+    && game.wave_index < WAVES.length
+    && game.spawn_remaining === 0
+    && game.enemies.length === 0;
+  if (between_waves) {
+    const seconds_left = Math.ceil(WAVE_BREAK_SECONDS - game.wave_break_timer);
+    ctx.textAlign = "center";
+    ctx.fillText("⏳ 下一波 " + seconds_left + " 秒后开始", canvas.width / 2, 40);
+  }
+}
+
+// ============ 图层9：胜负结算画面 ============
+// 游戏结束时：半透明遮罩 + 大字结果 + 重新开始提示
+function draw_game_over() {
+  if (game.state === "playing") return;
+
+  // 半透明白色遮罩（盖住战场，突出文字）
+  ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#111111";
+  ctx.font = "bold 48px sans-serif";
+  ctx.fillText(game.state === "won" ? "🎉 游戏胜利！" : "💀 游戏失败", canvas.width / 2, canvas.height / 2 - 20);
+
+  ctx.font = "20px sans-serif";
+  ctx.fillStyle = "#555555";
+  ctx.fillText("点击画面重新开始", canvas.width / 2, canvas.height / 2 + 30);
 }
 
 // ============ 工具函数 ============
@@ -281,8 +315,14 @@ canvas.addEventListener("mouseleave", function () {
   game.hover_cell = null;
 });
 
-// 点击：尝试建塔，把结果显示在状态栏
+// 点击：游戏结束时点击 = 重新开始；游戏中点击 = 尝试建塔
 canvas.addEventListener("click", function (event) {
+  if (game.state !== "playing") {
+    restart_game();
+    status_text.textContent = "🔄 游戏重新开始！第 1 波来袭";
+    return;
+  }
+
   const pos = event_to_canvas(event);
   const col = Math.floor(pos.x / GRID.cell);
   const row = Math.floor(pos.y / GRID.cell);

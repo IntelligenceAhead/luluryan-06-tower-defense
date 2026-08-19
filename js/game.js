@@ -98,13 +98,15 @@ function path_point(p) {
 //   hp       — 当前血量（≤0 表示死亡）
 //   max_hp   — 最大血量（画血条时用来算比例）
 //   reward   — 击杀后奖励的金币
-function create_enemy() {
+//
+// stats 参数由波次配置提供（见 WAVES），这样每波可以有不同的怪物强度
+function create_enemy(stats) {
   return {
     distance: 0,
-    speed: 80,      // 每秒 80 像素
-    hp: 100,
-    max_hp: 100,
-    reward: 50,     // 击杀奖励 50 金币
+    speed: stats.speed,
+    hp: stats.hp,
+    max_hp: stats.hp,
+    reward: stats.reward,
   };
 }
 
@@ -247,32 +249,107 @@ function place_tower(col, row) {
   return null;
 }
 
+// ============ 波次配置 ============
+// 每波一条记录：怪物的数量、出怪间隔、以及怪物属性。
+// 难度设计：逐波小步增强（数量↑、间隔↓、血量↑、速度↑），不突变。
+const WAVES = [
+  { enemies: 3,  interval: 1.5, hp: 100, speed: 80, reward: 50 },   // 第1波：热身
+  { enemies: 5,  interval: 1.2, hp: 100, speed: 80, reward: 50 },   // 第2波：数量变多
+  { enemies: 8,  interval: 1.0, hp: 120, speed: 85, reward: 50 },   // 第3波：血变厚
+  { enemies: 10, interval: 0.8, hp: 150, speed: 90, reward: 55 },   // 第4波：来得更密
+  { enemies: 12, interval: 0.7, hp: 180, speed: 95, reward: 60 },   // 第5波：全面加压
+];
+const WAVE_BREAK_SECONDS = 3;   // 波次之间的休息秒数
+
 // ============ 游戏状态 ============
 const game = {
-  enemies: [create_enemy()],   // 场上怪物（测试阶段先放一只）
+  enemies: [],                 // 场上的怪物
   towers: [],                  // 玩家建造的塔
   bullets: [],                 // 飞行中的子弹
   gold: 300,                   // 初始金币：够建 3 座塔
+  lives: 10,                   // 基地生命值：漏一只怪扣 1 点
+  state: "playing",            // 游戏状态：playing / won / lost
+  wave_index: 0,               // 当前第几波（0 开始）
+  spawn_remaining: 0,          // 本波还剩几只没出场
+  spawn_timer: 0,              // 距离下一次出怪还剩多少秒
+  wave_break_timer: 0,         // 波次间休息计时
   hover_cell: null,            // 鼠标悬停的格子（界面预览用，暂存在这）
   last_time: 0,                // 上一帧的时间戳（用来算时间差）
 };
+
+// 开始一波：设定本波要出多少只怪
+function start_wave(wave) {
+  game.spawn_remaining = wave.enemies;
+  game.spawn_timer = 0;   // 第一只立刻出场
+}
+
+// 重置游戏（重新开始一局）
+function restart_game() {
+  game.enemies = [];
+  game.towers = [];
+  game.bullets = [];
+  game.gold = 300;
+  game.lives = 10;
+  game.state = "playing";
+  game.wave_index = 0;
+  game.spawn_remaining = 0;
+  game.spawn_timer = 0;
+  game.wave_break_timer = 0;
+  start_wave(WAVES[0]);
+}
 
 // 更新游戏状态（每帧调用一次）
 // delta_time：距离上一帧过去了多少毫秒
 function update_game(delta_time) {
   const dt = delta_time / 1000;   // 换算成秒，方便计算
 
-  // 1. 怪物移动
-  for (const enemy of game.enemies) {
-    enemy.distance += enemy.speed * dt;
-    // 走完全程后回到起点重新走（临时循环，方便观察效果）
-    if (enemy.distance >= path_total_length()) {
-      enemy.distance = 0;
-      enemy.hp = enemy.max_hp;   // 血量也重置
+  // 0. 游戏已结束：冻结世界，什么都不更新
+  if (game.state !== "playing") {
+    return;
+  }
+
+  // 1. 波次管理：出怪 + 推进波次
+  if (game.wave_index < WAVES.length) {
+    const wave = WAVES[game.wave_index];
+    if (game.spawn_remaining > 0) {
+      // 本波还有怪没出场：按间隔计时出怪
+      game.spawn_timer -= dt;
+      if (game.spawn_timer <= 0) {
+        game.enemies.push(create_enemy(wave));
+        game.spawn_remaining--;
+        game.spawn_timer = wave.interval;
+      }
+    } else if (game.enemies.length === 0) {
+      // 本波出完且场上清空：休息几秒，然后进下一波
+      game.wave_break_timer += dt;
+      if (game.wave_break_timer >= WAVE_BREAK_SECONDS) {
+        game.wave_index++;
+        game.wave_break_timer = 0;
+        if (game.wave_index < WAVES.length) {
+          start_wave(WAVES[game.wave_index]);
+        } else {
+          game.state = "won";   // 所有波次打完：胜利！
+        }
+      }
     }
   }
 
-  // 2. 塔自动开火
+  // 2. 怪物移动。走到出口 = 漏怪：扣生命值，怪物消失
+  const alive = [];
+  for (const enemy of game.enemies) {
+    enemy.distance += enemy.speed * dt;
+    if (enemy.distance >= path_total_length()) {
+      game.lives -= 1;
+      if (game.lives <= 0) {
+        game.state = "lost";   // 生命值归零：失败！
+      }
+    } else {
+      alive.push(enemy);
+    }
+  }
+  game.enemies = alive;
+
+  // 3. 塔自动开火
   //    每个塔有一个"冷却计时器"：时间一到，只要射程内有怪物就射一发
   for (const tower of game.towers) {
     tower.cooldown -= dt;
@@ -283,7 +360,7 @@ function update_game(delta_time) {
     tower.cooldown = tower.fire_interval;          // 重置冷却
   }
 
-  // 3. 子弹飞行（追踪弹：每帧朝目标的当前位置飞）
+  // 4. 子弹飞行（追踪弹：每帧朝目标的当前位置飞）
   for (const bullet of game.bullets) {
     const tp = enemy_position(bullet.target);
     const dx = tp.x - bullet.x;
@@ -301,22 +378,20 @@ function update_game(delta_time) {
     }
   }
 
-  // 4. 移除已命中的子弹
+  // 5. 移除已命中的子弹
   game.bullets = game.bullets.filter(function (b) { return !b.hit; });
 
-  // 5. 击杀结算：血量归零的怪物移除，发放击杀奖励
-  const alive = [];
+  // 6. 击杀结算：血量归零的怪物移除，发放击杀奖励
+  const survivors = [];
   for (const enemy of game.enemies) {
     if (enemy.hp <= 0) {
       game.gold += enemy.reward;
     } else {
-      alive.push(enemy);
+      survivors.push(enemy);
     }
   }
-  game.enemies = alive;
-
-  // 演示阶段：场上怪物死光了就补一只新的，保证一直有怪可打
-  if (game.enemies.length === 0) {
-    game.enemies.push(create_enemy());
-  }
+  game.enemies = survivors;
 }
+
+// 游戏启动：开始第 1 波
+restart_game();
