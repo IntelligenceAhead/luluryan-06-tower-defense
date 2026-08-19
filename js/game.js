@@ -92,13 +92,19 @@ function path_point(p) {
 }
 
 // ============ 怪物 ============
-// 怪物只需要两个属性：
+// 怪物属性：
 //   distance — 已经沿路径走了多远（像素）
 //   speed    — 每秒钟走多少像素
+//   hp       — 当前血量（≤0 表示死亡）
+//   max_hp   — 最大血量（画血条时用来算比例）
+//   reward   — 击杀后奖励的金币
 function create_enemy() {
   return {
     distance: 0,
-    speed: 80,   // 每秒 80 像素
+    speed: 80,      // 每秒 80 像素
+    hp: 100,
+    max_hp: 100,
+    reward: 50,     // 击杀奖励 50 金币
   };
 }
 
@@ -145,31 +151,74 @@ function path_total_length() {
 }
 
 // ============ 塔 ============
+const TOWER_COST = 100;   // 建造一座塔要花 100 金币
+
 function create_tower(col, row) {
   return {
     col: col,
     row: row,
-    range: 2.2,   // 射程（格子数）——第3步打怪物时才真正派上用场
-    damage: 10,   // 攻击力（第3步用）
+    range: 2.2,           // 射程（格子数）
+    damage: 20,           // 每发子弹的伤害
+    fire_interval: 0.5,   // 两次开火的间隔（秒）→ 每秒 2 发
+    cooldown: 0,          // 距离下次开火还剩多少秒（≤0 表示可以开火）
   };
 }
 
-// 找到离塔最近的怪物（直线距离）。
-// 第3步实现攻击时会加上"必须在射程内"的条件。
+// 塔的像素坐标（格子中心）
+function tower_position(tower) {
+  return {
+    x: (tower.col + 0.5) * GRID.cell,
+    y: (tower.row + 0.5) * GRID.cell,
+  };
+}
+
+// 找到离塔最近的怪物（直线距离），用于炮管瞄准。
 function nearest_enemy(tower) {
-  const tx = (tower.col + 0.5) * GRID.cell;
-  const ty = (tower.row + 0.5) * GRID.cell;
+  const pos = tower_position(tower);
   let best = null;
   let best_dist = Infinity;
   for (const enemy of game.enemies) {
-    const pos = enemy_position(enemy);
-    const d = Math.hypot(pos.x - tx, pos.y - ty);
+    const ep = enemy_position(enemy);
+    const d = Math.hypot(ep.x - pos.x, ep.y - pos.y);
     if (d < best_dist) {
       best_dist = d;
       best = enemy;
     }
   }
   return best;
+}
+
+// 找到"射程内"离塔最近的怪物，用于开火。
+// 关键：射程判断用像素距离（勾股定理），和画出来的圆形射程圈一致。
+// 如果只按格子数近似，就会出现"圈外挨打"或"圈内不打"的视觉矛盾。
+function enemy_in_range(tower) {
+  const pos = tower_position(tower);
+  const range_px = tower.range * GRID.cell;
+  let best = null;
+  let best_dist = Infinity;
+  for (const enemy of game.enemies) {
+    const ep = enemy_position(enemy);
+    const d = Math.hypot(ep.x - pos.x, ep.y - pos.y);
+    if (d <= range_px && d < best_dist) {
+      best_dist = d;
+      best = enemy;
+    }
+  }
+  return best;
+}
+
+// ============ 子弹 ============
+// 子弹是"追踪弹"：记下目标怪物，每帧朝它的当前位置飞。
+function create_bullet(tower, target) {
+  const pos = tower_position(tower);
+  return {
+    x: pos.x,
+    y: pos.y,
+    target: target,      // 追踪哪只怪物
+    speed: 260,          // 每秒 260 像素
+    damage: tower.damage,// 命中时造成的伤害（由塔决定）
+    hit: false,          // 是否已命中（命中后子弹消失）
+  };
 }
 
 // 尝试在 (col, row) 建塔。
@@ -188,15 +237,22 @@ function place_tower(col, row) {
   if (game.towers.some(function (t) { return t.col === col && t.row === row; })) {
     return "这里已经有塔了";
   }
-  // 全部通过：建造！（花钱的规则第3步再加）
+  // 规则4：钱要够（经济系统的第一条规则）
+  if (game.gold < TOWER_COST) {
+    return "金币不足：建塔需要 " + TOWER_COST + " 金币，当前只有 " + game.gold;
+  }
+  // 全部通过：扣钱 + 建造！
+  game.gold -= TOWER_COST;
   game.towers.push(create_tower(col, row));
   return null;
 }
 
 // ============ 游戏状态 ============
 const game = {
-  enemies: [create_enemy()],   // 测试阶段：先放一只怪物
+  enemies: [create_enemy()],   // 场上怪物（测试阶段先放一只）
   towers: [],                  // 玩家建造的塔
+  bullets: [],                 // 飞行中的子弹
+  gold: 300,                   // 初始金币：够建 3 座塔
   hover_cell: null,            // 鼠标悬停的格子（界面预览用，暂存在这）
   last_time: 0,                // 上一帧的时间戳（用来算时间差）
 };
@@ -204,11 +260,63 @@ const game = {
 // 更新游戏状态（每帧调用一次）
 // delta_time：距离上一帧过去了多少毫秒
 function update_game(delta_time) {
+  const dt = delta_time / 1000;   // 换算成秒，方便计算
+
+  // 1. 怪物移动
   for (const enemy of game.enemies) {
-    enemy.distance += enemy.speed * (delta_time / 1000);
+    enemy.distance += enemy.speed * dt;
     // 走完全程后回到起点重新走（临时循环，方便观察效果）
     if (enemy.distance >= path_total_length()) {
       enemy.distance = 0;
+      enemy.hp = enemy.max_hp;   // 血量也重置
     }
+  }
+
+  // 2. 塔自动开火
+  //    每个塔有一个"冷却计时器"：时间一到，只要射程内有怪物就射一发
+  for (const tower of game.towers) {
+    tower.cooldown -= dt;
+    if (tower.cooldown > 0) continue;              // 还没到开火时间
+    const target = enemy_in_range(tower);          // 射程内最近的怪物
+    if (!target) continue;                         // 没有目标，继续等
+    game.bullets.push(create_bullet(tower, target));
+    tower.cooldown = tower.fire_interval;          // 重置冷却
+  }
+
+  // 3. 子弹飞行（追踪弹：每帧朝目标的当前位置飞）
+  for (const bullet of game.bullets) {
+    const tp = enemy_position(bullet.target);
+    const dx = tp.x - bullet.x;
+    const dy = tp.y - bullet.y;
+    const dist = Math.hypot(dx, dy);
+    const step = bullet.speed * dt;                // 这一帧能飞多远
+    if (dist <= step) {
+      // 足够飞到了：命中！
+      bullet.target.hp -= bullet.damage;
+      bullet.hit = true;
+    } else {
+      // 还没到：朝目标方向移动 step 距离
+      bullet.x += (dx / dist) * step;
+      bullet.y += (dy / dist) * step;
+    }
+  }
+
+  // 4. 移除已命中的子弹
+  game.bullets = game.bullets.filter(function (b) { return !b.hit; });
+
+  // 5. 击杀结算：血量归零的怪物移除，发放击杀奖励
+  const alive = [];
+  for (const enemy of game.enemies) {
+    if (enemy.hp <= 0) {
+      game.gold += enemy.reward;
+    } else {
+      alive.push(enemy);
+    }
+  }
+  game.enemies = alive;
+
+  // 演示阶段：场上怪物死光了就补一只新的，保证一直有怪可打
+  if (game.enemies.length === 0) {
+    game.enemies.push(create_enemy());
   }
 }

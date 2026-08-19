@@ -25,9 +25,11 @@ function draw() {
   draw_path();
   draw_hover();          // 悬停预览格
   draw_towers();         // 玩家建造的塔
+  draw_bullets();        // 飞行中的子弹（画在塔上、怪物下）
   for (const enemy of game.enemies) {
     draw_enemy(enemy);   // 怪物画在最上层，走路时"路过"塔
   }
+  draw_hud();            // 顶部信息栏：金币等（永远在最上层）
 }
 
 // ============ 图层1：背景 ============
@@ -175,8 +177,19 @@ function draw_tower(tower) {
   ctx.restore();
 }
 
-// ============ 图层6：怪物 ============
-// 黑白线条版怪物：一个"小幽灵"——圆头 + 椭圆身体 + 两个眼睛
+// ============ 图层6：子弹 ============
+// 黑白线条版子弹：一个小黑点
+function draw_bullets() {
+  ctx.fillStyle = "#111111";
+  for (const bullet of game.bullets) {
+    ctx.beginPath();
+    ctx.arc(bullet.x, bullet.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ============ 图层7：怪物 ============
+// 黑白线条版怪物：一个"小幽灵"——圆头 + 椭圆身体 + 两个眼睛 + 头顶血条
 function draw_enemy(enemy) {
   const pos = enemy_position(enemy);
   ctx.save();
@@ -208,6 +221,27 @@ function draw_enemy(enemy) {
   ctx.fill();
 
   ctx.restore();
+
+  // 血条：画在头顶。先画黑框，再按剩余血量比例填充黑色
+  const bar_w = 24;
+  const bar_h = 4;
+  const bar_x = pos.x - bar_w / 2;
+  const bar_y = pos.y - 24;
+  const hp_ratio = Math.max(0, enemy.hp / enemy.max_hp);   // 0~1 的比例
+  ctx.strokeStyle = "#111111";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(bar_x - 1, bar_y - 1, bar_w + 2, bar_h + 2);
+  ctx.fillStyle = "#111111";
+  ctx.fillRect(bar_x, bar_y, bar_w * hp_ratio, bar_h);
+}
+
+// ============ 图层8：信息栏（HUD） ============
+// 顶部信息：金币数量。以后关卡、生命值也会画在这里
+function draw_hud() {
+  ctx.fillStyle = "#111111";
+  ctx.font = "bold 16px sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText("💰 金币：" + game.gold, 12, 24);
 }
 
 // ============ 工具函数 ============
@@ -255,7 +289,7 @@ canvas.addEventListener("click", function (event) {
 
   const error = place_tower(col, row);   // 逻辑层负责判断能不能建
   if (error === null) {
-    status_text.textContent = "✅ 炮塔建造完成（第" + (col + 1) + "列，第" + (row + 1) + "行）";
+    status_text.textContent = "✅ 炮塔建造完成（花费 " + TOWER_COST + " 金币，剩余 " + game.gold + "）";
   } else {
     status_text.textContent = "❌ " + error;
   }
