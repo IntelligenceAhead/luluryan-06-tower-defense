@@ -385,7 +385,7 @@ function draw_hud() {
   ctx.font = "bold 16px sans-serif";
   ctx.textAlign = "left";
   ctx.fillText("❤️ 生命：" + game.lives, 12, 24);
-  ctx.fillText("🌊 波次：" + (game.wave_index + 1) + "/" + WAVES.length, 150, 24);
+  ctx.fillText("🌊 批次：" + (game.wave_index + 1) + "/" + WAVES.length, 150, 24);
 
   // 波次之间的休息倒计时提示
   const between_waves =
@@ -413,9 +413,9 @@ function draw_game_over() {
   ctx.fillStyle = "#111111";
 
   if (game.state === "won") {
-    // 胜利：大字 + 星级（★★☆ 形式，实心星 = 得到，空心星 = 失去）
+    // 救援成功：大字 + 星级（★★☆ 形式，实心星 = 得到，空心星 = 失去）
     ctx.font = "bold 48px sans-serif";
-    ctx.fillText("🎉 游戏胜利！", canvas.width / 2, canvas.height / 2 - 30);
+    ctx.fillText("🎉 救援成功！", canvas.width / 2, canvas.height / 2 - 30);
     ctx.font = "36px sans-serif";
     ctx.fillText(
       "★★★".slice(0, game.stars) + "☆☆☆".slice(0, 3 - game.stars),
@@ -427,7 +427,7 @@ function draw_game_over() {
     ctx.fillText("点击画面重新开始", canvas.width / 2, canvas.height / 2 + 65);
   } else {
     ctx.font = "bold 48px sans-serif";
-    ctx.fillText("💀 游戏失败", canvas.width / 2, canvas.height / 2 - 20);
+    ctx.fillText("💀 救援失败", canvas.width / 2, canvas.height / 2 - 20);
     ctx.font = "20px sans-serif";
     ctx.fillStyle = "#555555";
     ctx.fillText("点击画面重新开始", canvas.width / 2, canvas.height / 2 + 30);
@@ -523,7 +523,7 @@ canvas.addEventListener("mouseleave", function () {
 canvas.addEventListener("click", function (event) {
   if (game.state !== "playing") {
     restart_game();
-    status_text.textContent = "🔄 游戏重新开始！第 1 波来袭";
+    status_text.textContent = "🔄 重新开始！第 1 批物资出发";
     return;
   }
 
@@ -534,7 +534,7 @@ canvas.addEventListener("click", function (event) {
   const error = place_tower(col, row);   // 逻辑层负责判断能不能建
   const type = TOWER_TYPES.find(function (t) { return t.id === game.selected_tower_type; });
   if (error === null) {
-    status_text.textContent = "✅ " + type.name + "建造完成（花费 " + type.cost + " 金币，剩余 " + game.gold + "）";
+    status_text.textContent = "✅ " + type.name + "已部署（花费 " + type.cost + " 金币，剩余 " + game.gold + "）";
   } else {
     status_text.textContent = "❌ " + error;
   }

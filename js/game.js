@@ -157,21 +157,21 @@ function path_total_length() {
   return total;
 }
 
-// ============ 塔的类型表 ============
-// 5 种塔，每种一个"定位"（设计目标：能力差异化，互不重复）。
-// 塔本身只存"位置 + 类型"，所有数值都查这张表 ——
+// ============ 打捞设备类型表 ============
+// 5 种设备，每种一个"定位"（设计目标：能力差异化，互不重复）。
+// 设备本身只存"位置 + 类型"，所有数值都查这张表 ——
 // 以后调平衡只改这张表，代码不用动。这就是数据驱动。
 const TOWER_TYPES = [
-  // 基础炮塔：单体均衡，最便宜，开局主力
-  { id: "basic",  icon: "🎯", name: "基础炮塔", cost: 100, damage: 20,  fire_interval: 0.5,  range: 2.2, desc: "单体均衡，开局主力" },
-  // 速射塔：攻速极快但单发伤害低，克制脆皮快跑的怪
-  { id: "rapid",  icon: "⚡", name: "速射塔",   cost: 120, damage: 6,   fire_interval: 0.17, range: 2.0, desc: "每秒6发，克制脆皮" },
-  // 狙击塔：慢攻速、高伤害、远射程，一枪一个坦克怪
-  { id: "sniper", icon: "🔭", name: "狙击塔",   cost: 200, damage: 100, fire_interval: 2.5,  range: 3.5, desc: "慢而狠，一枪秒杀" },
-  // 减速塔：不造成伤害，让射程内的怪速度减半（光环效果）
-  { id: "frost",  icon: "❄️", name: "减速塔",   cost: 80,  slow_factor: 0.5,                 range: 2.0, desc: "无伤害，减速50%" },
-  // 溅射塔：命中时对落点周围的怪都造成伤害，克制团伙
-  { id: "splash", icon: "💥", name: "溅射塔",   cost: 150, damage: 15,  fire_interval: 1.0,  range: 2.0, splash_radius: 1.0, desc: "范围伤害，克制团伙" },
+  // 基础打捞钩：单体均衡，最便宜，开局主力
+  { id: "basic",  icon: "🎣", name: "基础打捞钩", cost: 100, damage: 20,  fire_interval: 0.5,  range: 2.2, desc: "单体均衡，开局主力" },
+  // 快速打捞器：抓取极快但每次进度少，追得上快速漂过的小动物
+  { id: "rapid",  icon: "⚡", name: "快速打捞器", cost: 120, damage: 6,   fire_interval: 0.17, range: 2.0, desc: "每秒6抓，追得上小动物" },
+  // 精准抓取臂：慢而狠，一次大量进度，克制沉重的工具箱
+  { id: "sniper", icon: "🎯", name: "精准抓取臂", cost: 200, damage: 100, fire_interval: 2.5,  range: 3.5, desc: "一次大进度，克制工具箱" },
+  // 水栅：不直接打捞，让范围内的物资漂速减半（减缓水流）
+  { id: "frost",  icon: "❄️", name: "水栅",     cost: 80,  slow_factor: 0.5,                 range: 2.0, desc: "减缓水流，无打捞力" },
+  // 大网：命中时对落点周围的物资一起打捞，克制成群物资
+  { id: "splash", icon: "🥅", name: "大网",     cost: 150, damage: 15,  fire_interval: 1.0,  range: 2.0, splash_radius: 1.0, desc: "一网打尽，克制物资群" },
 ];
 
 // 塔只记录"位置 + 类型 + 冷却"，具体属性查类型表（避免数据存两份）
