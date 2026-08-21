@@ -236,8 +236,13 @@ function draw_bullets() {
   }
 }
 
-// ============ 图层7：怪物 ============
-// 黑白线条版怪物：一个"小幽灵"——圆头 + 椭圆身体 + 两个眼睛 + 头顶血条
+// ============ 图层7：物资（漂流物） ============
+// 黑白线条版，5 种物资各有特征造型，一眼可辨：
+//   粮袋 = 圆角布袋 + 扎口
+//   小动物 = 圆头 + 耳朵 + 身后水花
+//   工具箱 = 大方箱 + 提手
+//   书卷 = 横卷 + 两端卷轴
+//   宝箱 = 箱体 + 盖线 + 锁
 function draw_enemy(enemy) {
   const pos = enemy_position(enemy);
   ctx.save();
@@ -247,34 +252,97 @@ function draw_enemy(enemy) {
   ctx.fillStyle = "#ffffff";
   ctx.lineWidth = 2;
 
-  // 圆头
-  ctx.beginPath();
-  ctx.arc(0, -8, 9, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  // 身体（椭圆）
-  ctx.beginPath();
-  ctx.ellipse(0, 9, 11, 10, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  // 眼睛（两个小黑点）
-  ctx.fillStyle = "#111111";
-  ctx.beginPath();
-  ctx.arc(-4, -9, 1.8, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(4, -9, 1.8, 0, Math.PI * 2);
-  ctx.fill();
+  if (enemy.type_id === "grain") {
+    // 粮袋：圆角布袋 + 顶部扎口
+    round_rect(-10, -9, 20, 18, 5);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-4, -9);
+    ctx.lineTo(-4, -13);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(4, -9);
+    ctx.lineTo(4, -13);
+    ctx.stroke();
+  } else if (enemy.type_id === "animal") {
+    // 小动物：身后水花 + 圆头 + 耳朵 + 眼睛
+    ctx.beginPath();
+    ctx.moveTo(-13, -4);
+    ctx.lineTo(-18, -4);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-13, 4);
+    ctx.lineTo(-18, 4);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-6, -6);
+    ctx.lineTo(-8, -13);
+    ctx.lineTo(-2, -8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(6, -6);
+    ctx.lineTo(8, -13);
+    ctx.lineTo(2, -8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#111111";
+    ctx.beginPath();
+    ctx.arc(-3, -1, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(3, -1, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (enemy.type_id === "toolbox") {
+    // 工具箱：大方箱 + 半圆提手
+    round_rect(-12, -8, 24, 16, 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, -8, 5, Math.PI, 0);
+    ctx.stroke();
+  } else if (enemy.type_id === "scroll") {
+    // 书卷：横卷 + 两端卷轴
+    round_rect(-10, -4, 20, 8, 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(-10, 0, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(10, 0, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  } else if (enemy.type_id === "chest") {
+    // 宝箱：箱体 + 盖线 + 锁
+    round_rect(-10, -6, 20, 14, 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-10, -1);
+    ctx.lineTo(10, -1);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 3, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
 
   ctx.restore();
 
-  // 血条：画在头顶。先画黑框，再按剩余血量比例填充黑色
+  // 工作量条：画在头顶。黑框 + 按剩余工作量比例填充黑色（填满 = 还没捞，清空 = 捞完了）
   const bar_w = 24;
   const bar_h = 4;
   const bar_x = pos.x - bar_w / 2;
-  const bar_y = pos.y - 24;
+  const bar_y = pos.y - 22;
   const hp_ratio = Math.max(0, enemy.hp / enemy.max_hp);   // 0~1 的比例
   ctx.strokeStyle = "#111111";
   ctx.lineWidth = 1;
@@ -282,12 +350,32 @@ function draw_enemy(enemy) {
   ctx.fillStyle = "#111111";
   ctx.fillRect(bar_x, bar_y, bar_w * hp_ratio, bar_h);
 
-  // 减速标记：被减速时头顶出现小雪花
+  // 状态标记：
+  //   书卷（regen>0）："+"，表示打捞成果被水浸倒扣
+  //   小动物（regen<0）："!"，表示生命在衰亡，抓紧救援
+  //   被水栅减速："❄"
+  ctx.font = "bold 13px sans-serif";
+  ctx.textAlign = "center";
+  if (enemy.regen > 0) {
+    ctx.fillText("+", pos.x + 12, pos.y - 12);
+  } else if (enemy.regen < 0) {
+    ctx.fillText("!", pos.x + 12, pos.y - 12);
+  }
   if (enemy.slow_factor < 1) {
     ctx.font = "14px sans-serif";
-    ctx.textAlign = "center";
     ctx.fillText("❄", pos.x, pos.y - 30);
   }
+}
+
+// 圆角矩形路径（供物资造型使用）
+function round_rect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
 }
 
 // ============ 图层8：信息栏（HUD） ============

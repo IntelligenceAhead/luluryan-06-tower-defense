@@ -91,23 +91,27 @@ function path_point(p) {
   };
 }
 
-// ============ 怪物 ============
-// 怪物属性：
-//   distance — 已经沿路径走了多远（像素）
-//   speed    — 每秒钟走多少像素
-//   hp       — 当前血量（≤0 表示死亡）
-//   max_hp   — 最大血量（画血条时用来算比例）
-//   reward   — 击杀后奖励的金币
+// ============ 物资（漂流物） ============
+// 物资属性：
+//   distance — 已经沿河流漂了多远（像素）
+//   speed    — 每秒钟漂多少像素
+//   hp       — 剩余打捞工作量（≤0 表示打捞完成）
+//   max_hp   — 初始打捞工作量（画进度条时用来算比例）
+//   reward   — 打捞成功后的奖励
+//   regen    — 每秒自动变化的工作量（正=水浸倒扣，负=自然衰亡）
 //
-// stats 参数由波次配置提供（见 WAVES），这样每波可以有不同的怪物强度
-function create_enemy(stats) {
+// type_id 指向 SUPPLY_TYPES 表，具体数值查表（数据驱动）
+function create_enemy(type_id) {
+  const type = SUPPLY_TYPES.find(function (t) { return t.id === type_id; });
   return {
+    type_id: type_id,
     distance: 0,
-    speed: stats.speed,
-    hp: stats.hp,
-    max_hp: stats.hp,
-    reward: stats.reward,
-    slow_factor: 1,      // 减速光环作用时的速度倍率（1 = 正常速度）
+    speed: type.speed,
+    hp: type.hp,
+    max_hp: type.hp,
+    reward: type.reward,
+    regen: type.regen,
+    slow_factor: 1,      // 水栅（减速）作用时的速度倍率（1 = 正常速度）
   };
 }
 
@@ -271,21 +275,36 @@ function place_tower(col, row) {
   return null;
 }
 
-// ============ 波次配置 ============
-// 每波一条记录：怪物数量、出怪节奏（gaps）、怪物属性。
+// ============ 物资类型表（漂流物资主题） ============
+// 5 种物资对应 5 个定位。hp = 打捞工作量：被设备打捞降到 0，表示救援成功。
+// regen = 每秒自动变化的打捞工作量：
+//   regen > 0（书卷）：遇水浸泡，打捞成果倒扣（hp 回升）
+//   regen < 0（小动物）：生命衰亡（hp 下降），归零 = 溺亡，救援失败
+const SUPPLY_TYPES = [
+  { id: "grain",   name: "粮袋",   hp: 120, speed: 80,  reward: 50,  regen: 0,  desc: "生存类，成群漂流" },
+  { id: "animal",  name: "小动物", hp: 60,  speed: 150, reward: 40,  regen: -8, desc: "生命类，挣扎求生，不及时救会溺亡" },
+  { id: "toolbox", name: "工具箱", hp: 300, speed: 60,  reward: 90,  regen: 0,  desc: "工具类，沉重难捞" },
+  { id: "scroll",  name: "书卷",   hp: 150, speed: 80,  reward: 70,  regen: 5,  desc: "知识类，遇水进度倒扣" },
+  { id: "chest",   name: "宝箱",   hp: 250, speed: 100, reward: 120, regen: 0,  desc: "财富类，高价值压轴" },
+];
+
+// ============ 波次配置（物资批次） ============
+// squads = 小队列表：先出完第 1 小队，再出第 2 小队……
+// gaps   = 出怪节奏表：出完一只后等多少秒出下一只，循环播放。
+// 如 [1.2, 0.3, 0.3] = 等 1.2 秒 → 两只连着出场（间隔 0.3 秒）→ 循环。
 //
-// gaps = "出怪节奏表"：出完一只怪后，等多少秒出下一只。
-// 一个数字 = 均匀节奏（无聊）；一串数字 = 有起伏的节奏（有趣）。
-// 如 [1.2, 0.3, 0.3] 表示：等 1.2 秒 → 两只连着冲出来（间隔仅 0.3 秒）→ 循环。
-// 这样敌人会结成"小团伙"进攻，玩家要应对突发压力。
-//
-// 难度设计：逐波小步增强（数量↑、团伙变大、血量↑、速度↑），不突变。
+// 难度设计：逐波小步增强（数量↑、新物资登场、节奏变密），不突变。
 const WAVES = [
-  { enemies: 3,  gaps: [1.5],                          hp: 100, speed: 80, reward: 50 },   // 第1波：热身，均匀出怪
-  { enemies: 5,  gaps: [1.2, 0.4, 0.4],                hp: 100, speed: 80, reward: 50 },   // 第2波：双人小团伙
-  { enemies: 8,  gaps: [1.2, 0.3, 0.3, 1.2],           hp: 120, speed: 85, reward: 50 },   // 第3波：双人团伙，循环
-  { enemies: 10, gaps: [1.0, 0.25, 0.25, 0.25, 1.5],   hp: 150, speed: 90, reward: 55 },   // 第4波：三人团伙
-  { enemies: 12, gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4], hp: 180, speed: 95, reward: 60 },   // 第5波：四人长队突击
+  // 第1批：教学，只有粮袋
+  { squads: [{ type: "grain", count: 3 }], gaps: [1.5] },
+  // 第2批：小动物登场（快、会溺亡）
+  { squads: [{ type: "grain", count: 3 }, { type: "animal", count: 2 }], gaps: [1.2, 0.4, 0.4] },
+  // 第3批：工具箱登场（重、慢）
+  { squads: [{ type: "grain", count: 3 }, { type: "animal", count: 3 }, { type: "toolbox", count: 1 }], gaps: [1.2, 0.3, 0.3, 1.2] },
+  // 第4批：书卷登场（进度倒扣）
+  { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 3 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
+  // 第5批：宝箱压轴（高价值）
+  { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 3 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }, { type: "chest", count: 1 }], gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4] },
 ];
 const WAVE_BREAK_SECONDS = 3;   // 波次之间的休息秒数
 
@@ -300,17 +319,19 @@ const game = {
   stars: 0,                    // 胜利时的星级评价（1~3 星）
   selected_tower_type: "basic",// 当前选中的塔型（在塔仓面板点选）
   wave_index: 0,               // 当前第几波（0 开始）
-  spawn_remaining: 0,          // 本波还剩几只没出场
-  spawn_timer: 0,              // 距离下一次出怪还剩多少秒
+  squad_index: 0,              // 当前波出到第几个小队
+  squad_remaining: 0,          // 当前小队还剩几只没出场
+  spawn_timer: 0,              // 距离下一次出场还剩多少秒
   spawn_gap_index: 0,          // 现在轮到节奏表（gaps）里的第几个间隔
   wave_break_timer: 0,         // 波次间休息计时
   hover_cell: null,            // 鼠标悬停的格子（界面预览用，暂存在这）
   last_time: 0,                // 上一帧的时间戳（用来算时间差）
 };
 
-// 开始一波：设定本波要出多少只怪
+// 开始一波：从第 1 小队开始出场
 function start_wave(wave) {
-  game.spawn_remaining = wave.enemies;
+  game.squad_index = 0;
+  game.squad_remaining = wave.squads[0].count;
   game.spawn_timer = 0;         // 第一只立刻出场
   game.spawn_gap_index = 0;     // 从节奏表的第一个间隔开始
 }
@@ -325,7 +346,8 @@ function restart_game() {
   game.state = "playing";
   game.stars = 0;
   game.wave_index = 0;
-  game.spawn_remaining = 0;
+  game.squad_index = 0;
+  game.squad_remaining = 0;
   game.spawn_timer = 0;
   game.spawn_gap_index = 0;
   game.wave_break_timer = 0;
@@ -352,19 +374,28 @@ function update_game(delta_time) {
     return;
   }
 
-  // 1. 波次管理：出怪 + 推进波次
+  // 1. 波次管理：按小队顺序出场 + 推进波次
   if (game.wave_index < WAVES.length) {
     const wave = WAVES[game.wave_index];
-    if (game.spawn_remaining > 0) {
-      // 本波还有怪没出场：按节奏表（gaps）计时出怪
-      game.spawn_timer -= dt;
-      if (game.spawn_timer <= 0) {
-        game.enemies.push(create_enemy(wave));
-        game.spawn_remaining--;
-        // 取节奏表里"下一个"间隔，取完一轮回到开头（用 % 取余实现循环）
-        const gap = wave.gaps[game.spawn_gap_index % wave.gaps.length];
-        game.spawn_gap_index++;
-        game.spawn_timer = gap;
+    if (game.squad_index < wave.squads.length) {
+      const squad = wave.squads[game.squad_index];
+      if (game.squad_remaining > 0) {
+        // 当前小队还有物资没出场：按节奏表（gaps）计时出场
+        game.spawn_timer -= dt;
+        if (game.spawn_timer <= 0) {
+          game.enemies.push(create_enemy(squad.type));
+          game.squad_remaining--;
+          // 取节奏表里"下一个"间隔，取完一轮回到开头（用 % 取余实现循环）
+          const gap = wave.gaps[game.spawn_gap_index % wave.gaps.length];
+          game.spawn_gap_index++;
+          game.spawn_timer = gap;
+        }
+      } else {
+        // 当前小队出完 → 进入下一个小队
+        game.squad_index++;
+        if (game.squad_index < wave.squads.length) {
+          game.squad_remaining = wave.squads[game.squad_index].count;
+        }
       }
     } else if (game.enemies.length === 0) {
       // 本波出完且场上清空：休息几秒，然后进下一波
@@ -382,8 +413,8 @@ function update_game(delta_time) {
     }
   }
 
-  // 2. 怪物移动。走到出口 = 漏怪：扣生命值，怪物消失
-  //    移动前先结算"减速光环"：站在减速塔射程里的怪，速度倍率降为 0.5
+  // 2. 物资漂流 + 自然衰亡结算。漂进漩涡 = 救援失败：扣生命值，物资消失
+  //    移动前先结算"减速光环"：站在水栅（减速塔）范围内的物资，速度倍率降为 0.5
   for (const enemy of game.enemies) {
     enemy.slow_factor = 1;   // 每帧先恢复为正常速度
   }
@@ -401,9 +432,24 @@ function update_game(delta_time) {
   }
   const alive = [];
   for (const enemy of game.enemies) {
+    // 自然变化：
+    //   书卷（regen>0）：水浸导致打捞成果倒扣（hp 回升，封顶 max_hp）
+    //   小动物（regen<0）：生命衰亡（hp 下降），归零 = 溺亡，救援失败
+    if (enemy.regen !== 0) {
+      enemy.hp += enemy.regen * dt;
+      if (enemy.regen > 0) {
+        enemy.hp = Math.min(enemy.hp, enemy.max_hp);
+      } else if (enemy.hp <= 0) {
+        game.lives -= 1;   // 溺亡：救援失败
+        if (game.lives <= 0) {
+          game.state = "lost";   // 生命值归零：失败！
+        }
+        continue;          // 物资消失（不给奖励）
+      }
+    }
     enemy.distance += enemy.speed * enemy.slow_factor * dt;   // 实际速度 = 基础速度 × 减速倍率
     if (enemy.distance >= path_total_length()) {
-      game.lives -= 1;
+      game.lives -= 1;   // 漂进漩涡：救援失败
       if (game.lives <= 0) {
         game.state = "lost";   // 生命值归零：失败！
       }
