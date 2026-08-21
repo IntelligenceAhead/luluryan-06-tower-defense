@@ -84,6 +84,8 @@ function draw_river_segment(a, b) {
   const oy = (dx / len) * half;             // 垂直于流向的偏移量 y
   const ux = dx / len;                      // 流向单位向量 x
   const uy = dy / len;                      // 流向单位向量 y
+  const nx = ox / half;                     // 垂直河向单位向量 x（长 1 像素）
+  const ny = oy / half;                     // 垂直河向单位向量 y（长 1 像素）
 
   // 水面（浅灰蓝底）
   ctx.strokeStyle = "#eef3f6";
@@ -117,9 +119,10 @@ function draw_river_segment(a, b) {
     const px = a.x + ux * len * t;
     const py = a.y + uy * len * t;
     // 画一条横跨河面的小弧线，弧顶朝下游弯曲（水的流动感）
+    // 波纹宽度用单位向量（nx, ny）× 7 像素，控制在河面以内
     ctx.beginPath();
-    ctx.moveTo(px + ox * 6, py + oy * 6);
-    ctx.quadraticCurveTo(px + ux * 4, py + uy * 4, px - ox * 6, py - oy * 6);
+    ctx.moveTo(px + nx * 7, py + ny * 7);
+    ctx.quadraticCurveTo(px + ux * 4, py + uy * 4, px - nx * 7, py - ny * 7);
     ctx.stroke();
   }
 }
