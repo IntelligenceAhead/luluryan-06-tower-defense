@@ -22,12 +22,12 @@ const status_text = document.getElementById("statusMessage");
 function draw() {
   draw_background();
   draw_grid();
-  draw_path();
+  draw_river();          // 河流（含漩涡、水纹）
   draw_hover();          // 悬停预览格
-  draw_towers();         // 玩家建造的塔
-  draw_bullets();        // 飞行中的子弹（画在塔上、怪物下）
+  draw_towers();         // 玩家部署的打捞设备
+  draw_bullets();        // 飞行中的子弹（画在设备上、物资下）
   for (const enemy of game.enemies) {
-    draw_enemy(enemy);   // 怪物画在最上层，走路时"路过"塔
+    draw_enemy(enemy);   // 物资画在最上层，漂流时"路过"设备
   }
   draw_hud();            // 顶部信息栏：金币等（永远在最上层）
   draw_game_over();      // 胜负结算画面（游戏结束时显示）
@@ -52,43 +52,48 @@ function draw_grid() {
   }
 }
 
-// ============ 图层3：路径 ============
-// 每段路 = 浅灰路面 + 两条黑色路沿，怪物走在路中间
-function draw_path() {
+// ============ 图层3：河流 ============
+// 每段河 = 浅色水面 + 两条黑色河岸 + 流动的水纹，物资漂在水面中央
+function draw_river() {
   // 把拐点换算成像素坐标
   const points = PATH.map(path_point);
 
-  // 逐段画路面和路沿
+  // 逐段画水面、河岸和水纹
   for (let i = 0; i < points.length - 1; i++) {
-    draw_road_segment(points[i], points[i + 1]);
+    draw_river_segment(points[i], points[i + 1]);
   }
 
-  // 入口 / 出口标记
+  // 上游标记（入口）
   ctx.fillStyle = "#111111";
   ctx.font = "13px sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("入口", 0.5 * GRID.cell, 3.5 * GRID.cell - 18);
-  ctx.fillText("出口", 19.5 * GRID.cell, 11.5 * GRID.cell + 26);
+  ctx.fillText("上游", 0.5 * GRID.cell, 3.5 * GRID.cell - 18);
+
+  // 下游漩涡（出口）：物资漂到这里就被吞掉
+  draw_whirlpool(948, 552);
+  ctx.fillText("漩涡", 19.5 * GRID.cell, 11.5 * GRID.cell + 26);
 }
 
-// 画一段路：浅灰粗线当路面，两侧各一条黑线当路沿
-function draw_road_segment(a, b) {
-  const half = GRID.cell * 0.35;            // 路宽的一半
+// 画一段河：浅色水面 + 两条河岸 + 沿流向漂移的水纹（动画）
+function draw_river_segment(a, b) {
+  const half = GRID.cell * 0.35;            // 河宽的一半
   const dx = b.x - a.x;
   const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);           // 这段路的长度
-  const ox = (-dy / len) * half;            // 垂直于路方向的偏移量 x
-  const oy = (dx / len) * half;             // 垂直于路方向的偏移量 y
+  const len = Math.hypot(dx, dy);           // 这段河的长度
+  const ox = (-dy / len) * half;            // 垂直于流向的偏移量 x
+  const oy = (dx / len) * half;             // 垂直于流向的偏移量 y
+  const ux = dx / len;                      // 流向单位向量 x
+  const uy = dy / len;                      // 流向单位向量 y
 
-  // 路面（浅灰粗线）
-  ctx.strokeStyle = "#f2f2f2";
+  // 水面（浅灰蓝底）
+  ctx.strokeStyle = "#eef3f6";
   ctx.lineWidth = half * 2;
   ctx.beginPath();
   ctx.moveTo(a.x, a.y);
   ctx.lineTo(b.x, b.y);
   ctx.stroke();
 
-  // 两条黑色路沿
+  // 两条黑色河岸
   ctx.strokeStyle = "#111111";
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -99,6 +104,38 @@ function draw_road_segment(a, b) {
   ctx.moveTo(a.x - ox, a.y - oy);
   ctx.lineTo(b.x - ox, b.y - oy);
   ctx.stroke();
+
+  // 水纹：沿流向均匀分布的小波浪线，随时间向下游漂移
+  // offset 用游戏时间计算并取余，让波纹周而复始地流动
+  const spacing = 22;                       // 波纹间距（像素）
+  const offset = (game.last_time / 400) % spacing;
+  ctx.strokeStyle = "#999999";
+  ctx.lineWidth = 1;
+  const wave_count = Math.floor((len + spacing) / spacing);
+  for (let i = 0; i < wave_count; i++) {
+    const t = ((i * spacing + offset) % len) / len;   // 波纹在河段上的位置（0~1）
+    const px = a.x + ux * len * t;
+    const py = a.y + uy * len * t;
+    // 画一条横跨河面的小弧线，弧顶朝下游弯曲（水的流动感）
+    ctx.beginPath();
+    ctx.moveTo(px + ox * 6, py + oy * 6);
+    ctx.quadraticCurveTo(px + ux * 4, py + uy * 4, px - ox * 6, py - oy * 6);
+    ctx.stroke();
+  }
+}
+
+// 漩涡：三层错开相位的圆弧持续旋转，形成"吸水"的视觉效果
+function draw_whirlpool(cx, cy) {
+  const phase = (game.last_time / 300) % (Math.PI * 2);   // 持续旋转的相位
+  ctx.strokeStyle = "#111111";
+  for (let i = 0; i < 3; i++) {
+    const radius = 6 + i * 7;               // 由内到外三层
+    ctx.lineWidth = i === 0 ? 1.5 : 2;
+    const start = phase + i * 2.1;          // 每层错开相位
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, start, start + Math.PI * 1.5);
+    ctx.stroke();
+  }
 }
 
 // ============ 图层4：悬停预览 ============
@@ -121,7 +158,7 @@ function draw_towers() {
   }
 }
 
-// 黑白线条版炮塔：射程圈 + 底座 + 按塔型画不同的"武器部分"
+// 黑白线条版打捞设备：射程圈 + 岸桩底座 + 按设备类型画不同的打捞装置
 function draw_tower(tower) {
   const type = tower_type(tower);
   const cx = (tower.col + 0.5) * GRID.cell;
@@ -130,7 +167,7 @@ function draw_tower(tower) {
   ctx.save();
   ctx.translate(cx, cy);
 
-  // 射程圈：半透明灰圆。怪物走进这个圆才会被打/被减速
+  // 作业范围圈：半透明灰圆。物资漂进这个圆才会被打捞/被减速
   ctx.beginPath();
   ctx.arc(0, 0, type.range * GRID.cell, 0, Math.PI * 2);
   ctx.fillStyle = "rgba(0, 0, 0, 0.06)";
@@ -143,81 +180,109 @@ function draw_tower(tower) {
   ctx.fillStyle = "#ffffff";
   ctx.lineWidth = 2;
 
-  // 底座（大圆）——所有塔都一样
+  // 岸桩底座（小圆）——所有设备都装在岸桩上
   ctx.beginPath();
-  ctx.arc(0, 0, 14, 0, Math.PI * 2);
+  ctx.arc(0, 0, 6, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
-  // 内圈（装饰，暗示这是可旋转的炮座）
-  ctx.beginPath();
-  ctx.arc(0, 0, 7, 0, Math.PI * 2);
-  ctx.stroke();
-
   if (type.id === "frost") {
-    // 减速塔：六角雪花，静止（不需要瞄准）
+    // 水栅：两根栅柱 + 三根横档，静止（不需要瞄准）
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-10, -12);
+    ctx.lineTo(-10, 12);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(10, -12);
+    ctx.lineTo(10, 12);
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    for (const y of [-6, 0, 6]) {
+      ctx.beginPath();
+      ctx.moveTo(-10, y);
+      ctx.lineTo(10, y);
+      ctx.stroke();
+    }
+    // 栅栏上方的小雪花（减速符号）
     ctx.lineWidth = 1.5;
     for (let i = 0; i < 6; i++) {
       const angle = (Math.PI / 3) * i;
       ctx.beginPath();
-      ctx.moveTo(Math.cos(angle) * 4, Math.sin(angle) * 4);
-      ctx.lineTo(Math.cos(angle) * 12, Math.sin(angle) * 12);
+      ctx.moveTo(Math.cos(angle) * 2, Math.sin(angle) * 2 - 14);
+      ctx.lineTo(Math.cos(angle) * 5, Math.sin(angle) * 5 - 14);
       ctx.stroke();
     }
   } else {
-    // 有炮管的塔：自动指向最近的怪物。
+    // 有机械臂的设备：自动伸向最近的物资。
     // 角度计算：atan2(垂直差, 水平差) —— 两点连线与水平方向的夹角
     const target = nearest_enemy(tower);
-    let barrel_angle = -Math.PI / 4;              // 没有目标时，默认朝右上
+    let arm_angle = -Math.PI / 4;                 // 没有目标时，默认朝右上
     if (target) {
       const tp = enemy_position(target);
-      barrel_angle = Math.atan2(tp.y - cy, tp.x - cx);
+      arm_angle = Math.atan2(tp.y - cy, tp.x - cx);
     }
-    ctx.rotate(barrel_angle);
+    ctx.rotate(arm_angle);
 
     if (type.id === "rapid") {
-      // 速射塔：两根短细炮管，呈八字
+      // 快速打捞器：三根短臂张开，每根末端一个小抓钩
       ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(16, -5);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(16, 5);
-      ctx.stroke();
+      for (const spread of [-0.35, 0, 0.35]) {
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(15, spread * 15);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(15, spread * 15, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
     } else if (type.id === "sniper") {
-      // 狙击塔：一根超长细炮管
+      // 精准抓取臂：一根超长机械臂 + 末端张开的两爪
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(0, 0);
-      ctx.lineTo(30, 0);
+      ctx.lineTo(28, 0);
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(30, 0, 2.5, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(28, 0);
+      ctx.lineTo(33, -4);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(28, 0);
+      ctx.lineTo(33, 4);
       ctx.stroke();
     } else if (type.id === "splash") {
-      // 溅射塔：短粗炮管
-      ctx.lineWidth = 5;
+      // 大网：短臂 + 网圈 + 网眼格线
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(0, 0);
-      ctx.lineTo(14, 0);
+      ctx.lineTo(13, 0);
       ctx.stroke();
-      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(14, 0, 3, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.arc(19, 0, 7, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(14, -5);
+      ctx.lineTo(24, 5);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(24, -5);
+      ctx.lineTo(14, 5);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(19, -7);
+      ctx.lineTo(19, 7);
       ctx.stroke();
     } else {
-      // 基础炮塔：标准炮管
+      // 基础打捞钩：长臂 + 末端弯钩
       ctx.beginPath();
       ctx.moveTo(0, 0);
-      ctx.lineTo(22, 0);
+      ctx.lineTo(19, 0);
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(22, 0, 3, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.arc(22, 0, 4, Math.PI * 0.25, Math.PI * 1.75);
       ctx.stroke();
     }
   }
