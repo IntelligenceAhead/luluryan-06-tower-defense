@@ -310,7 +310,7 @@ function place_tower(col, row) {
 //   regen < 0（小动物）：生命衰亡（hp 下降），归零 = 溺亡，救援失败
 const SUPPLY_TYPES = [
   { id: "grain",   name: "粮袋",   hp: 120, speed: 80,  reward: 50,  regen: 0,  desc: "生存类，成群漂流" },
-  { id: "animal",  name: "小动物", hp: 60,  speed: 150, reward: 40,  regen: -8, desc: "生命类，挣扎求生，不及时救会溺亡" },
+  { id: "animal",  name: "小动物", hp: 60,  speed: 150, reward: 40,  regen: -5, desc: "生命类，挣扎求生，不及时救会溺亡" },
   { id: "toolbox", name: "工具箱", hp: 300, speed: 60,  reward: 90,  regen: 0,  desc: "工具类，沉重难捞" },
   { id: "scroll",  name: "书卷",   hp: 150, speed: 80,  reward: 70,  regen: 5,  desc: "知识类，遇水进度倒扣" },
   { id: "chest",   name: "宝箱",   hp: 250, speed: 100, reward: 120, regen: 0,  desc: "财富类，高价值压轴" },
@@ -327,7 +327,7 @@ const SUPPLY_TYPES = [
 //   gaps   = 出怪节奏表（出完一只后等多少秒出下一只，循环播放）
 const LEVELS = [
   { // 第1关：教学，纯粮袋
-    river: "A", starting_gold: 300, lives: 10, waves: [
+    river: "A", starting_gold: 250, lives: 10, waves: [
       { squads: [{ type: "grain", count: 3 }], gaps: [1.5] },
       { squads: [{ type: "grain", count: 4 }], gaps: [1.2, 0.4, 0.4] },
       { squads: [{ type: "grain", count: 5 }], gaps: [1.0, 0.3, 0.3, 1.0] },
@@ -359,8 +359,8 @@ const LEVELS = [
     ],
   },
   { // 第5关：混合批
-    river: "B", starting_gold: 220, lives: 10, waves: [
-      { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 2 }], gaps: [1.2, 0.4, 0.4] },
+    river: "B", starting_gold: 240, lives: 10, waves: [
+      { squads: [{ type: "grain", count: 4 }], gaps: [1.5] },
       { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 3 }, { type: "toolbox", count: 1 }], gaps: [1.2, 0.3, 0.3, 1.2] },
       { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 3 }, { type: "scroll", count: 2 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
       { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 3 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
@@ -368,8 +368,8 @@ const LEVELS = [
     ],
   },
   { // 第6关：节奏加密
-    river: "B", starting_gold: 200, lives: 10, waves: [
-      { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 3 }], gaps: [1.2, 0.4, 0.4] },
+    river: "B", starting_gold: 230, lives: 10, waves: [
+      { squads: [{ type: "grain", count: 4 }], gaps: [1.5] },
       { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 4 }, { type: "toolbox", count: 1 }], gaps: [1.2, 0.3, 0.3, 1.2] },
       { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 3 }, { type: "toolbox", count: 2 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
       { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 4 }, { type: "scroll", count: 3 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
@@ -378,41 +378,41 @@ const LEVELS = [
     ],
   },
   { // 第7关：换短河，宝箱登场
-    river: "C", starting_gold: 200, lives: 8, waves: [
-      { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 3 }], gaps: [1.2, 0.4, 0.4] },
+    river: "C", starting_gold: 300, lives: 9, waves: [
+      { squads: [{ type: "grain", count: 3 }, { type: "animal", count: 2 }], gaps: [1.2, 0.4, 0.4] },
       { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 3 }, { type: "toolbox", count: 2 }], gaps: [1.2, 0.3, 0.3, 1.2] },
       { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 3 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
       { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 4 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }, { type: "chest", count: 1 }], gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4] },
     ],
   },
   { // 第8关：短河高压
-    river: "C", starting_gold: 180, lives: 8, waves: [
-      { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 3 }, { type: "toolbox", count: 2 }], gaps: [1.2, 0.3, 0.3, 1.2] },
+    river: "C", starting_gold: 300, lives: 9, waves: [
+      { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 2 }], gaps: [1.5] },
       { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 4 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
-      { squads: [{ type: "grain", count: 6 }, { type: "animal", count: 4 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 3 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
-      { squads: [{ type: "grain", count: 6 }, { type: "animal", count: 5 }, { type: "toolbox", count: 3 }, { type: "scroll", count: 3 }], gaps: [0.9, 0.25, 0.25, 0.25, 1.4] },
-      { squads: [{ type: "grain", count: 6 }, { type: "animal", count: 5 }, { type: "toolbox", count: 3 }, { type: "scroll", count: 3 }, { type: "chest", count: 1 }], gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4] },
+      { squads: [{ type: "grain", count: 6 }, { type: "animal", count: 4 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
+      { squads: [{ type: "grain", count: 6 }, { type: "animal", count: 5 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }], gaps: [0.9, 0.25, 0.25, 0.25, 1.4] },
+      { squads: [{ type: "grain", count: 6 }, { type: "animal", count: 5 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }, { type: "chest", count: 1 }], gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4] },
     ],
   },
   { // 第9关：回到S形河，终极混合
-    river: "A", starting_gold: 160, lives: 6, waves: [
-      { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 4 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
-      { squads: [{ type: "grain", count: 6 }, { type: "animal", count: 4 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 3 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
-      { squads: [{ type: "grain", count: 6 }, { type: "animal", count: 5 }, { type: "toolbox", count: 3 }, { type: "scroll", count: 3 }], gaps: [0.9, 0.25, 0.25, 0.25, 1.4] },
-      { squads: [{ type: "grain", count: 7 }, { type: "animal", count: 5 }, { type: "toolbox", count: 3 }, { type: "scroll", count: 3 }, { type: "chest", count: 1 }], gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4] },
-      { squads: [{ type: "grain", count: 7 }, { type: "animal", count: 6 }, { type: "toolbox", count: 3 }, { type: "scroll", count: 4 }, { type: "chest", count: 1 }], gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4] },
-      { squads: [{ type: "grain", count: 8 }, { type: "animal", count: 6 }, { type: "toolbox", count: 4 }, { type: "scroll", count: 4 }, { type: "chest", count: 1 }], gaps: [0.7, 0.15, 0.15, 0.15, 0.15, 1.5] },
+    river: "A", starting_gold: 240, lives: 7, waves: [
+      { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 2 }], gaps: [1.5] },
+      { squads: [{ type: "grain", count: 6 }, { type: "animal", count: 3 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
+      { squads: [{ type: "grain", count: 6 }, { type: "animal", count: 4 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }], gaps: [0.9, 0.25, 0.25, 0.25, 1.4] },
+      { squads: [{ type: "grain", count: 7 }, { type: "animal", count: 3 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }, { type: "chest", count: 1 }], gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4] },
+      { squads: [{ type: "grain", count: 7 }, { type: "animal", count: 4 }, { type: "toolbox", count: 3 }, { type: "scroll", count: 3 }, { type: "chest", count: 1 }], gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4] },
+      { squads: [{ type: "grain", count: 8 }, { type: "animal", count: 4 }, { type: "toolbox", count: 3 }, { type: "scroll", count: 3 }, { type: "chest", count: 1 }], gaps: [0.7, 0.15, 0.15, 0.15, 0.15, 1.5] },
     ],
   },
   { // 第10关：短河终极
-    river: "C", starting_gold: 150, lives: 5, waves: [
+    river: "C", starting_gold: 320, lives: 6, waves: [
+      { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 2 }], gaps: [1.5] },
       { squads: [{ type: "grain", count: 6 }, { type: "animal", count: 4 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
-      { squads: [{ type: "grain", count: 6 }, { type: "animal", count: 5 }, { type: "toolbox", count: 3 }, { type: "scroll", count: 3 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
-      { squads: [{ type: "grain", count: 7 }, { type: "animal", count: 5 }, { type: "toolbox", count: 3 }, { type: "scroll", count: 3 }], gaps: [0.9, 0.25, 0.25, 0.25, 1.4] },
-      { squads: [{ type: "grain", count: 7 }, { type: "animal", count: 6 }, { type: "toolbox", count: 4 }, { type: "scroll", count: 4 }, { type: "chest", count: 1 }], gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4] },
-      { squads: [{ type: "grain", count: 8 }, { type: "animal", count: 6 }, { type: "toolbox", count: 4 }, { type: "scroll", count: 4 }, { type: "chest", count: 2 }], gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4] },
-      { squads: [{ type: "grain", count: 8 }, { type: "animal", count: 7 }, { type: "toolbox", count: 4 }, { type: "scroll", count: 5 }, { type: "chest", count: 2 }], gaps: [0.7, 0.15, 0.15, 0.15, 0.15, 1.5] },
-      { squads: [{ type: "grain", count: 9 }, { type: "animal", count: 7 }, { type: "toolbox", count: 5 }, { type: "scroll", count: 5 }, { type: "chest", count: 3 }], gaps: [0.6, 0.12, 0.12, 0.12, 0.12, 1.6] },
+      { squads: [{ type: "grain", count: 7 }, { type: "animal", count: 4 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }], gaps: [0.9, 0.25, 0.25, 0.25, 1.4] },
+      { squads: [{ type: "grain", count: 7 }, { type: "animal", count: 4 }, { type: "toolbox", count: 3 }, { type: "scroll", count: 3 }, { type: "chest", count: 1 }], gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4] },
+      { squads: [{ type: "grain", count: 8 }, { type: "animal", count: 4 }, { type: "toolbox", count: 3 }, { type: "scroll", count: 3 }, { type: "chest", count: 2 }], gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4] },
+      { squads: [{ type: "grain", count: 8 }, { type: "animal", count: 5 }, { type: "toolbox", count: 3 }, { type: "scroll", count: 4 }, { type: "chest", count: 2 }], gaps: [0.7, 0.15, 0.15, 0.15, 0.15, 1.5] },
+      { squads: [{ type: "grain", count: 9 }, { type: "animal", count: 5 }, { type: "toolbox", count: 4 }, { type: "scroll", count: 4 }, { type: "chest", count: 3 }], gaps: [0.6, 0.12, 0.12, 0.12, 0.12, 1.6] },
     ],
   },
 ];
@@ -499,13 +499,15 @@ function save_progress() {
   }));
 }
 
-// 按剩余生命计算星级（胜利时结算）
-//   剩余 ≥ 10：⭐⭐⭐ 完美防御（一个都没漏）
-//   剩余 6~9：⭐⭐ 有惊无险
-//   剩余 1~5：⭐ 险胜
+// 按剩余生命比例计算星级（胜利时结算）。
+// 注意：各关生命上限不同（10/10/10/.../7/6），所以按"比例"而非固定数值：
+//   一个没漏（剩余 = 本关上限）→ ⭐⭐⭐ 完美防御
+//   剩余 ≥ 60% 上限 → ⭐⭐ 有惊无险
+//   剩余 < 60% → ⭐ 险胜
 function compute_stars() {
-  if (game.lives >= 10) return 3;
-  if (game.lives >= 6) return 2;
+  const max_lives = LEVELS[game.level_index].lives;
+  if (game.lives >= max_lives) return 3;
+  if (game.lives >= max_lives * 0.6) return 2;
   return 1;
 }
 
