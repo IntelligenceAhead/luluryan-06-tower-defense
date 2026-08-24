@@ -63,15 +63,39 @@ function draw_river() {
     draw_river_segment(points[i], points[i + 1]);
   }
 
-  // 上游标记（入口）
+  // 上游标记：动态跟随当前河道的入口（入口拐点在屏幕外，往回取一点进画面）
+  const entry = river_entry_position();
   ctx.fillStyle = "#111111";
   ctx.font = "13px sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("上游", 0.5 * GRID.cell, 3.5 * GRID.cell - 18);
+  ctx.fillText("上游", entry.x, entry.y - 18);
 
-  // 下游漩涡（出口）：物资漂到这里就被吞掉
-  draw_whirlpool(948, 552);
-  ctx.fillText("漩涡", 19.5 * GRID.cell, 11.5 * GRID.cell + 26);
+  // 下游漩涡：动态跟随当前河道的出口，物资漂到这里就被吞掉
+  const exit_pos = whirlpool_position();
+  draw_whirlpool(exit_pos.x, exit_pos.y);
+  ctx.fillText("漩涡", exit_pos.x, exit_pos.y + 28);
+}
+
+// 上游标记位置：取第一段河上、距入口 30 像素的点（确保在画面内）
+function river_entry_position() {
+  const a = path_point(PATH[0]);
+  const b = path_point(PATH[1]);
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy);
+  const t = Math.min(1, 30 / len);
+  return { x: a.x + dx * t, y: a.y + dy * t };
+}
+
+// 漩涡位置：取最后一段河上、距出口 26 像素的点（让漩涡完整落在画面内）
+function whirlpool_position() {
+  const a = path_point(PATH[PATH.length - 2]);
+  const b = path_point(PATH[PATH.length - 1]);
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy);
+  const t = Math.max(0, len - 26) / len;
+  return { x: a.x + dx * t, y: a.y + dy * t };
 }
 
 // 画一段河：浅色水面 + 两条河岸 + 沿流向漂移的水纹（动画）
@@ -447,19 +471,22 @@ function round_rect(x, y, w, h, r) {
 }
 
 // ============ 图层8：信息栏（HUD） ============
-// 顶部信息：生命值、波次进度（金币已移到右侧塔仓面板）
+// 顶部信息：生命值、关卡、批次进度（金币在右侧塔仓面板）
 function draw_hud() {
+  const level = LEVELS[game.level_index];
+
   ctx.fillStyle = "#111111";
   ctx.font = "bold 16px sans-serif";
   ctx.textAlign = "left";
   ctx.fillText("❤️ 生命：" + game.lives, 12, 24);
-  ctx.fillText("🌊 批次：" + (game.wave_index + 1) + "/" + WAVES.length, 150, 24);
+  ctx.fillText("🏞 关卡：" + (game.level_index + 1), 150, 24);
+  ctx.fillText("🌊 批次：" + (game.wave_index + 1) + "/" + level.waves.length, 290, 24);
 
   // 波次之间的休息倒计时提示
   const between_waves =
     game.state === "playing"
-    && game.wave_index < WAVES.length
-    && game.spawn_remaining === 0
+    && game.wave_index < level.waves.length
+    && game.squad_index >= level.waves[game.wave_index].squads.length
     && game.enemies.length === 0;
   if (between_waves) {
     const seconds_left = Math.ceil(WAVE_BREAK_SECONDS - game.wave_break_timer);
@@ -469,7 +496,7 @@ function draw_hud() {
 }
 
 // ============ 图层9：胜负结算画面 ============
-// 游戏结束时：半透明遮罩 + 大字结果 + 星级 + 重新开始提示
+// 游戏结束时：半透明遮罩 + 大字结果 + 星级 + 下一步提示
 function draw_game_over() {
   if (game.state === "playing") return;
 
@@ -483,7 +510,7 @@ function draw_game_over() {
   if (game.state === "won") {
     // 救援成功：大字 + 星级（★★☆ 形式，实心星 = 得到，空心星 = 失去）
     ctx.font = "bold 48px sans-serif";
-    ctx.fillText("🎉 救援成功！", canvas.width / 2, canvas.height / 2 - 30);
+    ctx.fillText("🎉 第 " + (game.level_index + 1) + " 关救援成功！", canvas.width / 2, canvas.height / 2 - 30);
     ctx.font = "36px sans-serif";
     ctx.fillText(
       "★★★".slice(0, game.stars) + "☆☆☆".slice(0, 3 - game.stars),
@@ -492,13 +519,17 @@ function draw_game_over() {
     );
     ctx.font = "20px sans-serif";
     ctx.fillStyle = "#555555";
-    ctx.fillText("点击画面重新开始", canvas.width / 2, canvas.height / 2 + 65);
+    if (game.level_index + 1 < LEVELS.length) {
+      ctx.fillText("点击进入第 " + (game.level_index + 2) + " 关", canvas.width / 2, canvas.height / 2 + 65);
+    } else {
+      ctx.fillText("🏆 全部通关！点击重新开始", canvas.width / 2, canvas.height / 2 + 65);
+    }
   } else {
     ctx.font = "bold 48px sans-serif";
     ctx.fillText("💀 救援失败", canvas.width / 2, canvas.height / 2 - 20);
     ctx.font = "20px sans-serif";
     ctx.fillStyle = "#555555";
-    ctx.fillText("点击画面重新开始", canvas.width / 2, canvas.height / 2 + 30);
+    ctx.fillText("点击重试第 " + (game.level_index + 1) + " 关", canvas.width / 2, canvas.height / 2 + 30);
   }
 }
 
@@ -587,11 +618,18 @@ canvas.addEventListener("mouseleave", function () {
   game.hover_cell = null;
 });
 
-// 点击：游戏结束时点击 = 重新开始；游戏中点击 = 尝试建塔
+// 点击：游戏结束时点击 = 进下一关/重试本关；游戏中点击 = 尝试部署设备
 canvas.addEventListener("click", function (event) {
   if (game.state !== "playing") {
-    restart_game();
-    status_text.textContent = "🔄 重新开始！第 1 批物资出发";
+    const was_won = game.state === "won";
+    const has_next = game.level_index + 1 < LEVELS.length;
+    if (was_won && has_next) {
+      start_level(game.level_index + 1);
+      status_text.textContent = "🚣 进入第 " + (game.level_index + 1) + " 关！";
+    } else {
+      start_level(game.level_index);
+      status_text.textContent = was_won ? "🔄 重新开始本关（刷星）" : "🔄 重试第 " + (game.level_index + 1) + " 关";
+    }
     return;
   }
 

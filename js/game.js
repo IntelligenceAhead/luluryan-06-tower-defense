@@ -6,10 +6,11 @@
  * 美术全部在 render.js 里完成 —— 以后换剪纸风/皮影风时，
  * 只重写 render.js，本文件一行都不用改。
  *
- * 概念回顾（对应植物大战僵尸）：
- *   PATH   = 僵尸走的那条路
- *   enemy  = 一只僵尸，只需要知道"走了多远"和"速度"
- *   tower  = 一座炮塔，记录"在哪个格子"和"射程"等属性
+ * 概念速查：
+ *   PATH   = 当前河道（物资漂流的路线，切换关卡时会换河）
+ *   enemy  = 一件漂流物资，只需要知道"漂了多远"和"速度"
+ *   tower  = 一台打捞设备，记录"在哪个格子"和"类型"
+ *   level  = 一关的配置（哪条河、金币、生命、批次表）
  */
 
 // ============ 地图配置 ============
@@ -20,27 +21,54 @@ const GRID = {
   cell: 48,
 };
 
-// ============ 路径定义 ============
-// 怪物沿"拐点列表"走：从入口开始，依次走向下一个拐点，最后从出口离开。
-// 坐标为 (列, 行)。-1 和 20 表示在屏幕外（入口/出口）。
-//
-// 路径走向示意：
-//   入口(-1,3) → 右走到 (16,3) → 下走到 (16,8) → 左走到 (3,8)
-//   → 下走到 (3,11) → 右走到 出口(20,11)
-const PATH = [
-  { col: -1, row: 3 },   // 入口（屏幕外左侧）
-  { col: 16, row: 3 },   // 右转往下
-  { col: 16, row: 8 },   // 左转
-  { col: 3, row: 8 },    // 往下
-  { col: 3, row: 11 },   // 右转
-  { col: 20, row: 11 },  // 出口（屏幕外右侧）
+// ============ 河流（地图）定义 ============
+// 3 条河共用同一套逻辑与绘制，区别只是拐点不同。
+// PATH = 当前河道的拐点列表（切换关卡时由 set_river 换成另一条河）。
+// 坐标 (列, 行)。-1 和 20 表示在屏幕外（上游入口/下游漩涡）。
+const RIVERS = [
+  // 河A（S形，中等长度，4 个拐角）：基础关
+  { id: "A", name: "S形河", path: [
+    { col: -1, row: 3 },   // 上游（屏幕外左侧）
+    { col: 16, row: 3 },
+    { col: 16, row: 8 },
+    { col: 3, row: 8 },
+    { col: 3, row: 11 },
+    { col: 20, row: 11 },  // 下游漩涡（屏幕外右侧）
+  ]},
+  // 河B（多弯长河，6 个拐角）：路线长、拐角多，打捞窗口大 → 偏简单
+  { id: "B", name: "长弯河", path: [
+    { col: -1, row: 3 },
+    { col: 8, row: 3 },
+    { col: 8, row: 6 },
+    { col: 16, row: 6 },
+    { col: 16, row: 9 },
+    { col: 2, row: 9 },
+    { col: 2, row: 11 },
+    { col: 20, row: 11 },
+  ]},
+  // 河C（短河，2 个拐角）：路线短，压力大 → 偏难
+  { id: "C", name: "短河", path: [
+    { col: -1, row: 5 },
+    { col: 12, row: 5 },
+    { col: 12, row: 11 },
+    { col: 20, row: 11 },
+  ]},
 ];
 
-// ============ 路径占用格子 ============
-// 建塔规则里有一句"不能建在道路上"。
-// 所以我们先算一遍：哪些格子的中心离路太近（算作"在道路上"）。
-// 启动时算一次存进 Set，之后每次查询都是"瞬间完成"。
-const path_cells = compute_path_cells();
+// 当前河道（切换关卡时由 set_river 更新）
+let PATH = RIVERS[0].path;
+
+// 换河：更新 PATH，并重新计算"河面占用的格子"
+function set_river(river) {
+  PATH = river.path;
+  path_cells = compute_path_cells();
+}
+
+// ============ 河面占用格子 ============
+// 建塔规则里有一句"不能建在河面上"。
+// 所以我们先算一遍：哪些格子的中心离河道太近（算作"在河面上"）。
+// 换河时重算一次存进 Set，之后每次查询都是"瞬间完成"。
+let path_cells = compute_path_cells();
 
 function compute_path_cells() {
   const cells = new Set();
@@ -288,23 +316,105 @@ const SUPPLY_TYPES = [
   { id: "chest",   name: "宝箱",   hp: 250, speed: 100, reward: 120, regen: 0,  desc: "财富类，高价值压轴" },
 ];
 
-// ============ 波次配置（物资批次） ============
-// squads = 小队列表：先出完第 1 小队，再出第 2 小队……
-// gaps   = 出怪节奏表：出完一只后等多少秒出下一只，循环播放。
-// 如 [1.2, 0.3, 0.3] = 等 1.2 秒 → 两只连着出场（间隔 0.3 秒）→ 循环。
+// ============ 关卡配置（10 关） ============
+// 每关一条记录：哪条河、初始金币、生命值、物资批次表。
+// 难度设计（对应设计目标"渐进不突变"）：
+//   金币逐关收紧 300→150，生命逐关收紧 10→5，
+//   新物资每 1~2 关登场一种（动物→工具→知识→财富）。
 //
-// 难度设计：逐波小步增强（数量↑、新物资登场、节奏变密），不突变。
-const WAVES = [
-  // 第1批：教学，只有粮袋
-  { squads: [{ type: "grain", count: 3 }], gaps: [1.5] },
-  // 第2批：小动物登场（快、会溺亡）
-  { squads: [{ type: "grain", count: 3 }, { type: "animal", count: 2 }], gaps: [1.2, 0.4, 0.4] },
-  // 第3批：工具箱登场（重、慢）
-  { squads: [{ type: "grain", count: 3 }, { type: "animal", count: 3 }, { type: "toolbox", count: 1 }], gaps: [1.2, 0.3, 0.3, 1.2] },
-  // 第4批：书卷登场（进度倒扣）
-  { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 3 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
-  // 第5批：宝箱压轴（高价值）
-  { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 3 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }, { type: "chest", count: 1 }], gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4] },
+// waves = 物资批次：
+//   squads = 小队列表（先出完第 1 队再出第 2 队……）
+//   gaps   = 出怪节奏表（出完一只后等多少秒出下一只，循环播放）
+const LEVELS = [
+  { // 第1关：教学，纯粮袋
+    river: "A", starting_gold: 300, lives: 10, waves: [
+      { squads: [{ type: "grain", count: 3 }], gaps: [1.5] },
+      { squads: [{ type: "grain", count: 4 }], gaps: [1.2, 0.4, 0.4] },
+      { squads: [{ type: "grain", count: 5 }], gaps: [1.0, 0.3, 0.3, 1.0] },
+    ],
+  },
+  { // 第2关：小动物登场
+    river: "A", starting_gold: 280, lives: 10, waves: [
+      { squads: [{ type: "grain", count: 3 }], gaps: [1.5] },
+      { squads: [{ type: "grain", count: 3 }, { type: "animal", count: 2 }], gaps: [1.2, 0.4, 0.4] },
+      { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 3 }], gaps: [1.2, 0.3, 0.3, 1.2] },
+      { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 4 }], gaps: [1.0, 0.3, 0.3, 0.3, 1.2] },
+    ],
+  },
+  { // 第3关：工具箱登场
+    river: "A", starting_gold: 260, lives: 10, waves: [
+      { squads: [{ type: "grain", count: 3 }], gaps: [1.5] },
+      { squads: [{ type: "grain", count: 3 }, { type: "animal", count: 2 }], gaps: [1.2, 0.4, 0.4] },
+      { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 3 }, { type: "toolbox", count: 1 }], gaps: [1.2, 0.3, 0.3, 1.2] },
+      { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 3 }, { type: "toolbox", count: 2 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
+      { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 3 }, { type: "toolbox", count: 2 }], gaps: [0.9, 0.25, 0.25, 0.25, 1.4] },
+    ],
+  },
+  { // 第4关：换长弯河，书卷登场
+    river: "B", starting_gold: 240, lives: 10, waves: [
+      { squads: [{ type: "grain", count: 3 }], gaps: [1.5] },
+      { squads: [{ type: "grain", count: 3 }, { type: "animal", count: 3 }], gaps: [1.2, 0.4, 0.4] },
+      { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 2 }, { type: "scroll", count: 2 }], gaps: [1.2, 0.3, 0.3, 1.2] },
+      { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 3 }, { type: "toolbox", count: 1 }, { type: "scroll", count: 2 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
+    ],
+  },
+  { // 第5关：混合批
+    river: "B", starting_gold: 220, lives: 10, waves: [
+      { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 2 }], gaps: [1.2, 0.4, 0.4] },
+      { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 3 }, { type: "toolbox", count: 1 }], gaps: [1.2, 0.3, 0.3, 1.2] },
+      { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 3 }, { type: "scroll", count: 2 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
+      { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 3 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
+      { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 4 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }], gaps: [0.9, 0.25, 0.25, 0.25, 1.4] },
+    ],
+  },
+  { // 第6关：节奏加密
+    river: "B", starting_gold: 200, lives: 10, waves: [
+      { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 3 }], gaps: [1.2, 0.4, 0.4] },
+      { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 4 }, { type: "toolbox", count: 1 }], gaps: [1.2, 0.3, 0.3, 1.2] },
+      { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 3 }, { type: "toolbox", count: 2 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
+      { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 4 }, { type: "scroll", count: 3 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
+      { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 4 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }], gaps: [0.9, 0.25, 0.25, 0.25, 1.4] },
+      { squads: [{ type: "grain", count: 6 }, { type: "animal", count: 4 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 3 }], gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4] },
+    ],
+  },
+  { // 第7关：换短河，宝箱登场
+    river: "C", starting_gold: 200, lives: 8, waves: [
+      { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 3 }], gaps: [1.2, 0.4, 0.4] },
+      { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 3 }, { type: "toolbox", count: 2 }], gaps: [1.2, 0.3, 0.3, 1.2] },
+      { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 3 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
+      { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 4 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }, { type: "chest", count: 1 }], gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4] },
+    ],
+  },
+  { // 第8关：短河高压
+    river: "C", starting_gold: 180, lives: 8, waves: [
+      { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 3 }, { type: "toolbox", count: 2 }], gaps: [1.2, 0.3, 0.3, 1.2] },
+      { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 4 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
+      { squads: [{ type: "grain", count: 6 }, { type: "animal", count: 4 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 3 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
+      { squads: [{ type: "grain", count: 6 }, { type: "animal", count: 5 }, { type: "toolbox", count: 3 }, { type: "scroll", count: 3 }], gaps: [0.9, 0.25, 0.25, 0.25, 1.4] },
+      { squads: [{ type: "grain", count: 6 }, { type: "animal", count: 5 }, { type: "toolbox", count: 3 }, { type: "scroll", count: 3 }, { type: "chest", count: 1 }], gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4] },
+    ],
+  },
+  { // 第9关：回到S形河，终极混合
+    river: "A", starting_gold: 160, lives: 6, waves: [
+      { squads: [{ type: "grain", count: 5 }, { type: "animal", count: 4 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
+      { squads: [{ type: "grain", count: 6 }, { type: "animal", count: 4 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 3 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
+      { squads: [{ type: "grain", count: 6 }, { type: "animal", count: 5 }, { type: "toolbox", count: 3 }, { type: "scroll", count: 3 }], gaps: [0.9, 0.25, 0.25, 0.25, 1.4] },
+      { squads: [{ type: "grain", count: 7 }, { type: "animal", count: 5 }, { type: "toolbox", count: 3 }, { type: "scroll", count: 3 }, { type: "chest", count: 1 }], gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4] },
+      { squads: [{ type: "grain", count: 7 }, { type: "animal", count: 6 }, { type: "toolbox", count: 3 }, { type: "scroll", count: 4 }, { type: "chest", count: 1 }], gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4] },
+      { squads: [{ type: "grain", count: 8 }, { type: "animal", count: 6 }, { type: "toolbox", count: 4 }, { type: "scroll", count: 4 }, { type: "chest", count: 1 }], gaps: [0.7, 0.15, 0.15, 0.15, 0.15, 1.5] },
+    ],
+  },
+  { // 第10关：短河终极
+    river: "C", starting_gold: 150, lives: 5, waves: [
+      { squads: [{ type: "grain", count: 6 }, { type: "animal", count: 4 }, { type: "toolbox", count: 2 }, { type: "scroll", count: 2 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
+      { squads: [{ type: "grain", count: 6 }, { type: "animal", count: 5 }, { type: "toolbox", count: 3 }, { type: "scroll", count: 3 }], gaps: [1.0, 0.25, 0.25, 0.25, 1.5] },
+      { squads: [{ type: "grain", count: 7 }, { type: "animal", count: 5 }, { type: "toolbox", count: 3 }, { type: "scroll", count: 3 }], gaps: [0.9, 0.25, 0.25, 0.25, 1.4] },
+      { squads: [{ type: "grain", count: 7 }, { type: "animal", count: 6 }, { type: "toolbox", count: 4 }, { type: "scroll", count: 4 }, { type: "chest", count: 1 }], gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4] },
+      { squads: [{ type: "grain", count: 8 }, { type: "animal", count: 6 }, { type: "toolbox", count: 4 }, { type: "scroll", count: 4 }, { type: "chest", count: 2 }], gaps: [0.8, 0.2, 0.2, 0.2, 0.2, 1.4] },
+      { squads: [{ type: "grain", count: 8 }, { type: "animal", count: 7 }, { type: "toolbox", count: 4 }, { type: "scroll", count: 5 }, { type: "chest", count: 2 }], gaps: [0.7, 0.15, 0.15, 0.15, 0.15, 1.5] },
+      { squads: [{ type: "grain", count: 9 }, { type: "animal", count: 7 }, { type: "toolbox", count: 5 }, { type: "scroll", count: 5 }, { type: "chest", count: 3 }], gaps: [0.6, 0.12, 0.12, 0.12, 0.12, 1.6] },
+    ],
+  },
 ];
 const WAVE_BREAK_SECONDS = 3;   // 波次之间的休息秒数
 
@@ -318,6 +428,9 @@ const game = {
   state: "playing",            // 游戏状态：playing / won / lost
   stars: 0,                    // 胜利时的星级评价（1~3 星）
   selected_tower_type: "basic",// 当前选中的塔型（在塔仓面板点选）
+  level_index: 0,              // 当前第几关（0 开始）
+  unlocked_level: 0,           // 已解锁的最新关卡（存档持久化）
+  level_stars: {},             // 每关的最高星级 { 关卡号: 星数 }
   wave_index: 0,               // 当前第几波（0 开始）
   squad_index: 0,              // 当前波出到第几个小队
   squad_remaining: 0,          // 当前小队还剩几只没出场
@@ -336,13 +449,16 @@ function start_wave(wave) {
   game.spawn_gap_index = 0;     // 从节奏表的第一个间隔开始
 }
 
-// 重置游戏（重新开始一局）
-function restart_game() {
+// 开始指定关卡：换河、重置战场、载入本关配置
+function start_level(level_index) {
+  const level = LEVELS[level_index];
+  set_river(RIVERS.find(function (r) { return r.id === level.river; }));
+  game.level_index = level_index;
   game.enemies = [];
   game.towers = [];
   game.bullets = [];
-  game.gold = 300;
-  game.lives = 10;
+  game.gold = level.starting_gold;
+  game.lives = level.lives;
   game.state = "playing";
   game.stars = 0;
   game.wave_index = 0;
@@ -351,7 +467,36 @@ function restart_game() {
   game.spawn_timer = 0;
   game.spawn_gap_index = 0;
   game.wave_break_timer = 0;
-  start_wave(WAVES[0]);
+  start_wave(level.waves[0]);
+}
+
+// 重开当前关（失败重试 / 通关后再刷星）
+function restart_game() {
+  start_level(game.level_index);
+}
+
+// ============ 存档（localStorage） ============
+// 存档内容：已解锁关卡 + 每关最高星级。
+// 注意：node 测试环境没有 localStorage，先判断是否存在（逻辑层保持可独立测试）。
+const SAVE_KEY = "river_rescue_save";
+
+function load_save() {
+  if (typeof localStorage === "undefined") return null;
+  const text = localStorage.getItem(SAVE_KEY);
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    return null;   // 存档损坏就当没有
+  }
+}
+
+function save_progress() {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(SAVE_KEY, JSON.stringify({
+    unlocked: game.unlocked_level,
+    stars: game.level_stars,
+  }));
 }
 
 // 按剩余生命计算星级（胜利时结算）
@@ -375,8 +520,9 @@ function update_game(delta_time) {
   }
 
   // 1. 波次管理：按小队顺序出场 + 推进波次
-  if (game.wave_index < WAVES.length) {
-    const wave = WAVES[game.wave_index];
+  const level = LEVELS[game.level_index];
+  if (game.wave_index < level.waves.length) {
+    const wave = level.waves[game.wave_index];
     if (game.squad_index < wave.squads.length) {
       const squad = wave.squads[game.squad_index];
       if (game.squad_remaining > 0) {
@@ -403,11 +549,18 @@ function update_game(delta_time) {
       if (game.wave_break_timer >= WAVE_BREAK_SECONDS) {
         game.wave_index++;
         game.wave_break_timer = 0;
-        if (game.wave_index < WAVES.length) {
-          start_wave(WAVES[game.wave_index]);
+        if (game.wave_index < level.waves.length) {
+          start_wave(level.waves[game.wave_index]);
         } else {
           game.state = "won";             // 所有波次打完：胜利！
           game.stars = compute_stars();   // 按剩余生命结算星级
+          // 存档：更新本关最高星级 + 解锁下一关
+          game.level_stars[game.level_index] =
+            Math.max(game.level_stars[game.level_index] || 0, game.stars);
+          if (game.level_index + 1 < LEVELS.length) {
+            game.unlocked_level = Math.max(game.unlocked_level, game.level_index + 1);
+          }
+          save_progress();
         }
       }
     }
@@ -516,5 +669,10 @@ function update_game(delta_time) {
   game.enemies = survivors;
 }
 
-// 游戏启动：开始第 1 波
-restart_game();
+// 游戏启动：读取存档，从"已解锁的最新一关"开始
+const saved = load_save();
+if (saved) {
+  game.unlocked_level = saved.unlocked || 0;
+  game.level_stars = saved.stars || {};
+}
+start_level(Math.min(game.unlocked_level, LEVELS.length - 1));
