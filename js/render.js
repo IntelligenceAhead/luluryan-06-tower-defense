@@ -336,7 +336,7 @@ function draw_tower(tower) {
   ctx.restore();
 
   // 耐久条：画在底座下方（耐久不满时才显示，提示"该维修了"）
-  if (tower.durability < 100) {
+  if (tower.durability < TOWER_DURABILITY) {
     const bar_w = 24;
     const bar_h = 3;
     const bar_x = cx - bar_w / 2;
