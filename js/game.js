@@ -332,11 +332,11 @@ function repair_tower(tower) {
 //   regen > 0（书卷）：遇水浸泡，打捞成果倒扣（hp 回升）
 //   regen < 0（小动物）：生命衰亡（hp 下降），归零 = 溺亡，救援失败
 const SUPPLY_TYPES = [
-  { id: "grain",   name: "粮袋",   hp: 120, speed: 80,  reward: 50,  regen: 0,  desc: "生存类，成群漂流" },
-  { id: "animal",  name: "小动物", hp: 60,  speed: 150, reward: 40,  regen: -5, desc: "生命类，挣扎求生，不及时救会溺亡" },
-  { id: "toolbox", name: "工具箱", hp: 300, speed: 60,  reward: 90,  regen: 0,  desc: "工具类，沉重难捞" },
-  { id: "scroll",  name: "书卷",   hp: 150, speed: 80,  reward: 70,  regen: 5,  desc: "知识类，遇水进度倒扣" },
-  { id: "chest",   name: "宝箱",   hp: 250, speed: 100, reward: 120, regen: 0,  desc: "财富类，高价值压轴" },
+  { id: "grain",   name: "粮袋",   hp: 120, speed: 80,  reward: 45,  regen: 0,  desc: "生存类，成群漂流" },
+  { id: "animal",  name: "小动物", hp: 60,  speed: 150, reward: 35,  regen: -5, desc: "生命类，挣扎求生，不及时救会溺亡" },
+  { id: "toolbox", name: "工具箱", hp: 300, speed: 60,  reward: 80,  regen: 0,  desc: "工具类，沉重难捞" },
+  { id: "scroll",  name: "书卷",   hp: 150, speed: 80,  reward: 60,  regen: 5,  desc: "知识类，遇水进度倒扣" },
+  { id: "chest",   name: "宝箱",   hp: 250, speed: 100, reward: 105, regen: 0,  desc: "财富类，高价值压轴" },
 ];
 
 // ============ 关卡配置（10 关） ============
@@ -350,14 +350,14 @@ const SUPPLY_TYPES = [
 //   gaps   = 出怪节奏表（出完一只后等多少秒出下一只，循环播放）
 const LEVELS = [
   { // 第1关：教学，纯粮袋
-    river: "A", starting_gold: 250, lives: 10, waves: [
+    river: "A", starting_gold: 280, lives: 10, waves: [
       { squads: [{ type: "grain", count: 3 }], gaps: [1.5] },
       { squads: [{ type: "grain", count: 4 }], gaps: [1.2, 0.4, 0.4] },
       { squads: [{ type: "grain", count: 5 }], gaps: [1.0, 0.3, 0.3, 1.0] },
     ],
   },
   { // 第2关：小动物登场
-    river: "A", starting_gold: 280, lives: 10, waves: [
+    river: "A", starting_gold: 260, lives: 10, waves: [
       { squads: [{ type: "grain", count: 3 }], gaps: [1.5] },
       { squads: [{ type: "grain", count: 3 }, { type: "animal", count: 2 }], gaps: [1.2, 0.4, 0.4] },
       { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 3 }], gaps: [1.2, 0.3, 0.3, 1.2] },
@@ -365,7 +365,7 @@ const LEVELS = [
     ],
   },
   { // 第3关：工具箱登场
-    river: "A", starting_gold: 260, lives: 10, waves: [
+    river: "A", starting_gold: 250, lives: 10, waves: [
       { squads: [{ type: "grain", count: 3 }], gaps: [1.5] },
       { squads: [{ type: "grain", count: 3 }, { type: "animal", count: 2 }], gaps: [1.2, 0.4, 0.4] },
       { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 3 }, { type: "toolbox", count: 1 }], gaps: [1.2, 0.3, 0.3, 1.2] },
