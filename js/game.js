@@ -350,14 +350,14 @@ const SUPPLY_TYPES = [
 //   gaps   = 出怪节奏表（出完一只后等多少秒出下一只，循环播放）
 const LEVELS = [
   { // 第1关：教学，纯粮袋
-    river: "A", starting_gold: 280, lives: 10, waves: [
+    river: "A", starting_gold: 300, lives: 10, waves: [
       { squads: [{ type: "grain", count: 3 }], gaps: [1.5] },
       { squads: [{ type: "grain", count: 4 }], gaps: [1.2, 0.4, 0.4] },
       { squads: [{ type: "grain", count: 5 }], gaps: [1.0, 0.3, 0.3, 1.0] },
     ],
   },
   { // 第2关：小动物登场
-    river: "A", starting_gold: 260, lives: 10, waves: [
+    river: "A", starting_gold: 280, lives: 10, waves: [
       { squads: [{ type: "grain", count: 3 }], gaps: [1.5] },
       { squads: [{ type: "grain", count: 3 }, { type: "animal", count: 2 }], gaps: [1.2, 0.4, 0.4] },
       { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 3 }], gaps: [1.2, 0.3, 0.3, 1.2] },
@@ -365,7 +365,7 @@ const LEVELS = [
     ],
   },
   { // 第3关：工具箱登场
-    river: "A", starting_gold: 250, lives: 10, waves: [
+    river: "A", starting_gold: 270, lives: 10, waves: [
       { squads: [{ type: "grain", count: 3 }], gaps: [1.5] },
       { squads: [{ type: "grain", count: 3 }, { type: "animal", count: 2 }], gaps: [1.2, 0.4, 0.4] },
       { squads: [{ type: "grain", count: 4 }, { type: "animal", count: 3 }, { type: "toolbox", count: 1 }], gaps: [1.2, 0.3, 0.3, 1.2] },
