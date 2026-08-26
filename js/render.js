@@ -571,7 +571,7 @@ function draw_game_over() {
     if (game.level_index + 1 < LEVELS.length) {
       ctx.fillText("点击进入第 " + (game.level_index + 2) + " 关", canvas.width / 2, canvas.height / 2 + 65);
     } else {
-      ctx.fillText("🏆 全部通关！点击重新开始", canvas.width / 2, canvas.height / 2 + 65);
+      ctx.fillText("🏆 全部通关！点击回到第 1 关", canvas.width / 2, canvas.height / 2 + 65);
     }
   } else {
     ctx.font = "bold 48px sans-serif";
@@ -675,9 +675,12 @@ canvas.addEventListener("click", function (event) {
     if (was_won && has_next) {
       start_level(game.level_index + 1);
       status_text.textContent = "🚣 进入第 " + (game.level_index + 1) + " 关！";
+    } else if (was_won && !has_next) {
+      start_level(0);   // 全部通关：回到第 1 关，开始新的旅程
+      status_text.textContent = "🏆 全部通关！从第 1 关开始新的旅程";
     } else {
       start_level(game.level_index);
-      status_text.textContent = was_won ? "🔄 重新开始本关（刷星）" : "🔄 重试第 " + (game.level_index + 1) + " 关";
+      status_text.textContent = "🔄 重试第 " + (game.level_index + 1) + " 关";
     }
     return;
   }
