@@ -26,6 +26,7 @@ function draw() {
   draw_hover();          // 悬停预览格
   draw_towers();         // 玩家部署的打捞设备
   draw_bullets();        // 飞行中的子弹（画在设备上、物资下）
+  draw_effects();        // 视觉特效：扩散圆环等
   for (const enemy of game.enemies) {
     draw_enemy(enemy);   // 物资画在最上层，漂流时"路过"设备
   }
@@ -361,7 +362,22 @@ function draw_bullets() {
   }
 }
 
-// ============ 图层7：物资（漂流物） ============
+// ============ 图层7：视觉特效 ============
+// 大网收尾时的扩散圆环：0.5 秒内从半径 6 扩散到 26，逐渐淡出
+function draw_effects() {
+  for (const effect of game.effects) {
+    const progress = effect.age / 0.5;          // 0 → 1
+    const radius = 6 + progress * 20;           // 扩散
+    const alpha = 1 - progress;                 // 淡出
+    ctx.strokeStyle = "rgba(17, 17, 17, " + alpha.toFixed(2) + ")";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+// ============ 图层8：物资（漂流物） ============
 // 黑白线条版，5 种物资各有特征造型，一眼可辨：
 //   粮袋 = 圆角布袋 + 扎口
 //   小动物 = 圆头 + 耳朵 + 身后水花

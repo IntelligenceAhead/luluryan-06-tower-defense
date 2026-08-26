@@ -201,7 +201,7 @@ const TOWER_TYPES = [
   // 水栅：不直接打捞，让范围内的物资漂速减半（减速时缓慢磨损）
   { id: "frost",  icon: "❄️", name: "水栅",     cost: 80,  slow_factor: 0.5,                 range: 2.0, wear_per_second: 0.5, desc: "减缓水流，无打捞力" },
   // 大网：命中时对落点周围的物资一起打捞，克制成群物资
-  { id: "splash", icon: "🥅", name: "大网",     cost: 150, damage: 15,  fire_interval: 1.0,  range: 2.0, splash_radius: 1.0, wear_per_shot: 1.2, desc: "一网打尽，克制物资群" },
+  { id: "splash", icon: "🥅", name: "大网",     cost: 150, damage: 15,  fire_interval: 1.0,  range: 2.0, splash_radius: 1.0, wear_per_shot: 1.2, desc: "一网捞起残血物资" },
 ];
 
 // 塔只记录"位置 + 类型 + 冷却"，具体属性查类型表（避免数据存两份）
@@ -278,6 +278,23 @@ function enemy_in_range(tower) {
     }
   }
   return best || fallback;   // 有优先目标就抓优先的，否则抓最近的任意物资
+}
+
+// 找射程内"剩余工作量 ≤ FINISH_HP"的残血物资（大网收尾用），取残血最少的
+function enemy_ready_to_finish(tower) {
+  const pos = tower_position(tower);
+  const range_px = tower_type(tower).range * GRID.cell;
+  let best = null;
+  let best_hp = FINISH_HP;
+  for (const enemy of game.enemies) {
+    const ep = enemy_position(enemy);
+    const d = Math.hypot(ep.x - pos.x, ep.y - pos.y);
+    if (d <= range_px && enemy.hp <= best_hp) {
+      best_hp = enemy.hp;
+      best = enemy;
+    }
+  }
+  return best;
 }
 
 // ============ 子弹 ============
@@ -455,12 +472,14 @@ const LEVELS = [
   },
 ];
 const WAVE_BREAK_SECONDS = 3;   // 波次之间的休息秒数
+const FINISH_HP = 20;              // 大网收尾线：剩余工作量 ≤ 20 的物资一网捞起
 
 // ============ 游戏状态 ============
 const game = {
   enemies: [],                 // 场上的怪物
   towers: [],                  // 玩家建造的塔
   bullets: [],                 // 飞行中的子弹
+  effects: [],                 // 视觉特效（扩散圆环等）
   gold: 300,                   // 初始金币：够建 3 座塔
   lives: 10,                   // 基地生命值：漏一只怪扣 1 点
   state: "playing",            // 游戏状态：playing / won / lost
@@ -671,10 +690,28 @@ function update_game(delta_time) {
     if (tower.broken) continue;                    // 已损坏：停机
     tower.cooldown -= dt;
     if (tower.cooldown > 0) continue;              // 还没到作业时间
+    tower.cooldown = type.fire_interval;           // 重置冷却（间隔由设备类型决定）
+
+    // 大网的收尾机制：射程内有"残血"物资（剩余工作量 ≤ FINISH_HP）→ 一网直接捞起
+    // hp 设为 0 后，由第 6 步结算统一发放奖励（不重复发钱）
+    if (type.splash_radius > 0) {
+      const finish = enemy_ready_to_finish(tower);
+      if (finish) {
+        const tp = enemy_position(finish);
+        finish.hp = 0;
+        game.effects.push({ x: tp.x, y: tp.y, age: 0 });   // 视觉特效：扩散圆环
+        tower.durability -= type.wear_per_shot || 1;
+        if (tower.durability <= 0) {
+          tower.durability = 0;
+          tower.broken = true;
+        }
+        continue;
+      }
+    }
+
     const target = enemy_in_range(tower);          // 射程内最近的物资
     if (!target) continue;                         // 没有目标，继续等
     game.bullets.push(create_bullet(tower, target));
-    tower.cooldown = type.fire_interval;           // 重置冷却（间隔由设备类型决定）
     // 磨损结算：每次作业消耗耐久度，归零 = 损坏
     tower.durability -= type.wear_per_shot || 1;
     if (tower.durability <= 0) {
@@ -725,6 +762,12 @@ function update_game(delta_time) {
     }
   }
   game.enemies = survivors;
+
+  // 7. 特效老化：超过寿命的特效移除（具体画法在 render.js）
+  for (const effect of game.effects) {
+    effect.age += dt;
+  }
+  game.effects = game.effects.filter(function (e) { return e.age < 0.5; });
 }
 
 // 游戏启动：读取存档，从"已解锁的最新一关"开始
