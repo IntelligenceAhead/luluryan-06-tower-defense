@@ -690,7 +690,6 @@ function update_game(delta_time) {
     if (tower.broken) continue;                    // 已损坏：停机
     tower.cooldown -= dt;
     if (tower.cooldown > 0) continue;              // 还没到作业时间
-    tower.cooldown = type.fire_interval;           // 重置冷却（间隔由设备类型决定）
 
     // 大网的收尾机制：射程内有"残血"物资（剩余工作量 ≤ FINISH_HP）→ 一网直接捞起
     // hp 设为 0 后，由第 6 步结算统一发放奖励（不重复发钱）
@@ -700,6 +699,7 @@ function update_game(delta_time) {
         const tp = enemy_position(finish);
         finish.hp = 0;
         game.effects.push({ x: tp.x, y: tp.y, age: 0 });   // 视觉特效：扩散圆环
+        tower.cooldown = type.fire_interval;               // 重置冷却（作业了才重置）
         tower.durability -= type.wear_per_shot || 1;
         if (tower.durability <= 0) {
           tower.durability = 0;
@@ -712,6 +712,7 @@ function update_game(delta_time) {
     const target = enemy_in_range(tower);          // 射程内最近的物资
     if (!target) continue;                         // 没有目标，继续等
     game.bullets.push(create_bullet(tower, target));
+    tower.cooldown = type.fire_interval;           // 重置冷却（作业了才重置）
     // 磨损结算：每次作业消耗耐久度，归零 = 损坏
     tower.durability -= type.wear_per_shot || 1;
     if (tower.durability <= 0) {
