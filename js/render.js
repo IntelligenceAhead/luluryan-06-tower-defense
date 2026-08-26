@@ -185,7 +185,7 @@ function draw_towers() {
   }
 }
 
-// 黑白线条版打捞设备：射程圈 + 岸桩底座 + 按设备类型画不同的打捞装置
+// 黑白线条版打捞设备：射程圈 + 岸桩底座 + 按设备类型画不同的打捞装置 + 耐久条
 function draw_tower(tower) {
   const type = tower_type(tower);
   const cx = (tower.col + 0.5) * GRID.cell;
@@ -193,6 +193,31 @@ function draw_tower(tower) {
 
   ctx.save();
   ctx.translate(cx, cy);
+
+  ctx.strokeStyle = "#111111";
+  ctx.fillStyle = "#ffffff";
+  ctx.lineWidth = 2;
+
+  // 岸桩底座（小圆）——所有设备都装在岸桩上
+  ctx.beginPath();
+  ctx.arc(0, 0, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // 损坏的设备：只画底座 + 大叉叉，没有射程圈
+  if (tower.broken) {
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-6, -6);
+    ctx.lineTo(6, 6);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-6, 6);
+    ctx.lineTo(6, -6);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
 
   // 作业范围圈：半透明灰圆。物资漂进这个圆才会被打捞/被减速
   ctx.beginPath();
@@ -206,12 +231,6 @@ function draw_tower(tower) {
   ctx.strokeStyle = "#111111";
   ctx.fillStyle = "#ffffff";
   ctx.lineWidth = 2;
-
-  // 岸桩底座（小圆）——所有设备都装在岸桩上
-  ctx.beginPath();
-  ctx.arc(0, 0, 6, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
 
   if (type.id === "frost") {
     // 水栅：两根栅柱 + 三根横档，静止（不需要瞄准）
@@ -315,6 +334,20 @@ function draw_tower(tower) {
   }
 
   ctx.restore();
+
+  // 耐久条：画在底座下方（耐久不满时才显示，提示"该维修了"）
+  if (tower.durability < 100) {
+    const bar_w = 24;
+    const bar_h = 3;
+    const bar_x = cx - bar_w / 2;
+    const bar_y = cy + 12;
+    const ratio = Math.max(0, tower.durability / TOWER_DURABILITY);
+    ctx.strokeStyle = "#111111";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(bar_x - 1, bar_y - 1, bar_w + 2, bar_h + 2);
+    ctx.fillStyle = "#111111";
+    ctx.fillRect(bar_x, bar_y, bar_w * ratio, bar_h);
+  }
 }
 
 // ============ 图层6：子弹 ============
@@ -636,6 +669,19 @@ canvas.addEventListener("click", function (event) {
   const pos = event_to_canvas(event);
   const col = Math.floor(pos.x / GRID.cell);
   const row = Math.floor(pos.y / GRID.cell);
+
+  // 点中已有设备 → 进入维修流程（而不是报"这里已经有塔了"）
+  const existing = game.towers.find(function (t) { return t.col === col && t.row === row; });
+  if (existing) {
+    const err = repair_tower(existing);
+    const type = tower_type(existing);
+    if (err === null) {
+      status_text.textContent = "🔧 " + type.name + "维修完成（剩余 " + game.gold + " 金币）";
+    } else {
+      status_text.textContent = "❌ " + err;
+    }
+    return;
+  }
 
   const error = place_tower(col, row);   // 逻辑层负责判断能不能建
   const type = TOWER_TYPES.find(function (t) { return t.id === game.selected_tower_type; });

@@ -190,25 +190,30 @@ function path_total_length() {
 // 设备本身只存"位置 + 类型"，所有数值都查这张表 ——
 // 以后调平衡只改这张表，代码不用动。这就是数据驱动。
 const TOWER_TYPES = [
+  // wear = 每次作业的磨损（耐久度消耗）。耐久 100，归零 = 损坏停机，需花金币维修。
   // 基础打捞钩：单体均衡，最便宜，开局主力
-  { id: "basic",  icon: "🎣", name: "基础打捞钩", cost: 100, damage: 20,  fire_interval: 0.5,  range: 2.2, desc: "单体均衡，开局主力" },
-  // 快速打捞器：抓取极快但每次进度少，追得上快速漂过的小动物
-  { id: "rapid",  icon: "⚡", name: "快速打捞器", cost: 120, damage: 6,   fire_interval: 0.17, range: 2.0, desc: "每秒6抓，追得上小动物" },
-  // 精准抓取臂：慢而狠，一次大量进度，克制沉重的工具箱
-  { id: "sniper", icon: "🎯", name: "精准抓取臂", cost: 200, damage: 100, fire_interval: 2.5,  range: 3.5, desc: "一次大进度，克制工具箱" },
-  // 水栅：不直接打捞，让范围内的物资漂速减半（减缓水流）
-  { id: "frost",  icon: "❄️", name: "水栅",     cost: 80,  slow_factor: 0.5,                 range: 2.0, desc: "减缓水流，无打捞力" },
+  { id: "basic",  icon: "🎣", name: "基础打捞钩", cost: 100, damage: 20,  fire_interval: 0.5,  range: 2.2, wear_per_shot: 1,   desc: "单体均衡，开局主力" },
+  // 快速打捞器：抓取极快，总输出比基础钩高三分之一，但射程短、磨损快
+  { id: "rapid",  icon: "⚡", name: "快速打捞器", cost: 120, damage: 8,   fire_interval: 0.15, range: 2.0, wear_per_shot: 0.15, desc: "高频高输出，追得上小动物" },
+  // 精准抓取臂：一枪秒杀粮袋/书卷，超远射程，啃工具箱两枪一个
+  { id: "sniper", icon: "🎯", name: "精准抓取臂", cost: 200, damage: 150, fire_interval: 2.5,  range: 4.5, wear_per_shot: 2,   desc: "超远射程，一枪秒粮袋书卷" },
+  // 水栅：不直接打捞，让范围内的物资漂速减半（减速时缓慢磨损）
+  { id: "frost",  icon: "❄️", name: "水栅",     cost: 80,  slow_factor: 0.5,                 range: 2.0, wear_per_second: 0.5, desc: "减缓水流，无打捞力" },
   // 大网：命中时对落点周围的物资一起打捞，克制成群物资
-  { id: "splash", icon: "🥅", name: "大网",     cost: 150, damage: 15,  fire_interval: 1.0,  range: 2.0, splash_radius: 1.0, desc: "一网打尽，克制物资群" },
+  { id: "splash", icon: "🥅", name: "大网",     cost: 150, damage: 15,  fire_interval: 1.0,  range: 2.0, splash_radius: 1.0, wear_per_shot: 1.2, desc: "一网打尽，克制物资群" },
 ];
 
 // 塔只记录"位置 + 类型 + 冷却"，具体属性查类型表（避免数据存两份）
+const TOWER_DURABILITY = 50;   // 设备耐久上限（数值越小磨损越快、维修越频繁）
+
 function create_tower(col, row, type_id) {
   return {
     col: col,
     row: row,
     type_id: type_id,
-    cooldown: 0,          // 距离下次开火还剩多少秒（≤0 表示可以开火）
+    cooldown: 0,                        // 距离下次作业还剩多少秒（≤0 表示可以作业）
+    durability: TOWER_DURABILITY,       // 当前耐久度，归零 = 损坏停机
+    broken: false,                      // 是否已损坏
   };
 }
 
@@ -300,6 +305,24 @@ function place_tower(col, row) {
   // 全部通过：扣钱 + 建造！
   game.gold -= type.cost;
   game.towers.push(create_tower(col, row, type.id));
+  return null;
+}
+
+// 维修设备：花金币把耐久度回满（花费 = 造价 × 50% × 缺失比例，最少 10 金币）。
+// 成功：返回 null；失败：返回原因（中文，供界面显示）
+function repair_tower(tower) {
+  const type = tower_type(tower);
+  if (!tower.broken && tower.durability >= TOWER_DURABILITY) {
+    return "状态良好，无需维修";
+  }
+  const missing = TOWER_DURABILITY - tower.durability;
+  const cost = Math.max(10, Math.ceil(missing / TOWER_DURABILITY * type.cost * 0.5));
+  if (game.gold < cost) {
+    return "金币不足：维修需要 " + cost + " 金币，当前只有 " + game.gold;
+  }
+  game.gold -= cost;
+  tower.durability = TOWER_DURABILITY;
+  tower.broken = false;
   return null;
 }
 
@@ -575,13 +598,24 @@ function update_game(delta_time) {
   }
   for (const tower of game.towers) {
     const type = tower_type(tower);
-    if (!type.slow_factor) continue;   // 不是减速塔
+    if (!type.slow_factor) continue;   // 不是水栅
+    if (tower.broken) continue;        // 已损坏：停机
     const pos = tower_position(tower);
     const range_px = type.range * GRID.cell;
+    let slowed_any = false;
     for (const enemy of game.enemies) {
       const ep = enemy_position(enemy);
       if (Math.hypot(ep.x - pos.x, ep.y - pos.y) <= range_px) {
         enemy.slow_factor = type.slow_factor;
+        slowed_any = true;
+      }
+    }
+    // 水栅在"工作"时缓慢磨损
+    if (slowed_any) {
+      tower.durability -= (type.wear_per_second || 0) * dt;
+      if (tower.durability <= 0) {
+        tower.durability = 0;
+        tower.broken = true;
       }
     }
   }
@@ -614,17 +648,24 @@ function update_game(delta_time) {
   }
   game.enemies = alive;
 
-  // 3. 塔自动开火
-  //    每个塔有一个"冷却计时器"：时间一到，只要射程内有怪物就射一发
+  // 3. 设备自动作业（开火）
+  //    每个设备有一个"冷却计时器"：时间一到，只要射程内有物资就作业一次
   for (const tower of game.towers) {
     const type = tower_type(tower);
-    if (type.slow_factor) continue;                // 减速塔不发射子弹（靠光环减速）
+    if (type.slow_factor) continue;                // 水栅不发射子弹（靠光环减速）
+    if (tower.broken) continue;                    // 已损坏：停机
     tower.cooldown -= dt;
-    if (tower.cooldown > 0) continue;              // 还没到开火时间
-    const target = enemy_in_range(tower);          // 射程内最近的怪物
+    if (tower.cooldown > 0) continue;              // 还没到作业时间
+    const target = enemy_in_range(tower);          // 射程内最近的物资
     if (!target) continue;                         // 没有目标，继续等
     game.bullets.push(create_bullet(tower, target));
-    tower.cooldown = type.fire_interval;           // 重置冷却（间隔由塔型决定）
+    tower.cooldown = type.fire_interval;           // 重置冷却（间隔由设备类型决定）
+    // 磨损结算：每次作业消耗耐久度，归零 = 损坏
+    tower.durability -= type.wear_per_shot || 1;
+    if (tower.durability <= 0) {
+      tower.durability = 0;
+      tower.broken = true;
+    }
   }
 
   // 4. 子弹飞行（追踪弹：每帧朝目标的当前位置飞）
