@@ -194,9 +194,10 @@ const TOWER_TYPES = [
   // 基础打捞钩：单体均衡，最便宜，开局主力
   { id: "basic",  icon: "🎣", name: "基础打捞钩", cost: 100, damage: 20,  fire_interval: 0.5,  range: 2.2, wear_per_shot: 1,   desc: "单体均衡，开局主力" },
   // 快速打捞器：抓取极快，总输出比基础钩高三分之一，但射程短、磨损快
-  { id: "rapid",  icon: "⚡", name: "快速打捞器", cost: 120, damage: 8,   fire_interval: 0.15, range: 2.0, wear_per_shot: 0.15, desc: "高频高输出，追得上小动物" },
-  // 精准抓取臂：一枪秒杀粮袋/书卷，超远射程，啃工具箱两枪一个
-  { id: "sniper", icon: "🎯", name: "精准抓取臂", cost: 200, damage: 150, fire_interval: 2.5,  range: 4.5, wear_per_shot: 2,   desc: "超远射程，一枪秒粮袋书卷" },
+  // prefer = 优先打捞的物资类型：射程内有书卷就优先捞书卷（赶在水浸倒扣前）
+  { id: "rapid",  icon: "⚡", name: "快速打捞器", cost: 120, damage: 8,   fire_interval: 0.15, range: 2.0, wear_per_shot: 0.15, prefer: "scroll", desc: "快速捞书卷，赶在水浸前" },
+  // 精准抓取臂：一枪秒杀，超远射程；优先精准抓取挣扎的小动物
+  { id: "sniper", icon: "🎯", name: "精准抓取臂", cost: 200, damage: 150, fire_interval: 2.5,  range: 4.5, wear_per_shot: 2,   prefer: "animal", desc: "精准抓小动物，一枪一个" },
   // 水栅：不直接打捞，让范围内的物资漂速减半（减速时缓慢磨损）
   { id: "frost",  icon: "❄️", name: "水栅",     cost: 80,  slow_factor: 0.5,                 range: 2.0, wear_per_second: 0.5, desc: "减缓水流，无打捞力" },
   // 大网：命中时对落点周围的物资一起打捞，克制成群物资
@@ -246,23 +247,37 @@ function nearest_enemy(tower) {
   return best;
 }
 
-// 找到"射程内"离塔最近的怪物，用于开火。
+// 找到"射程内"要打捞的物资，用于作业。
 // 关键：射程判断用像素距离（勾股定理），和画出来的圆形射程圈一致。
 // 如果只按格子数近似，就会出现"圈外挨打"或"圈内不打"的视觉矛盾。
+//
+// 目标优先级（prefer）：设备会先锁定"优先类型"里的最近物资
+//   （如精准抓取臂优先小动物），射程内没有优先类型时才打捞最近的任意物资。
 function enemy_in_range(tower) {
   const pos = tower_position(tower);
-  const range_px = tower_type(tower).range * GRID.cell;
+  const type = tower_type(tower);
+  const range_px = type.range * GRID.cell;
+  const prefer = type.prefer;
   let best = null;
   let best_dist = Infinity;
+  let fallback = null;
+  let fallback_dist = Infinity;
   for (const enemy of game.enemies) {
     const ep = enemy_position(enemy);
     const d = Math.hypot(ep.x - pos.x, ep.y - pos.y);
-    if (d <= range_px && d < best_dist) {
+    if (d > range_px) continue;
+    // 优先类型：取其中最近的
+    if (enemy.type_id === prefer && d < best_dist) {
       best_dist = d;
       best = enemy;
     }
+    // 兜底：任意类型里最近的
+    if (d < fallback_dist) {
+      fallback_dist = d;
+      fallback = enemy;
+    }
   }
-  return best;
+  return best || fallback;   // 有优先目标就抓优先的，否则抓最近的任意物资
 }
 
 // ============ 子弹 ============
