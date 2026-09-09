@@ -17,6 +17,23 @@ const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 const status_text = document.getElementById("statusMessage");
 
+// ============ 调色板（剪纸风） ============
+// 换皮 = 换这张表（数据驱动思想用到美术层）。
+// 五个主色：大红（物资）、金（宝箱/特效/点缀）、黑（描边/设备剪影）、
+//           湖水蓝（河面）、草地绿（河岸）
+const PALETTE = {
+  paper: "#faf5ea",         // 米白纸色：背景、结算遮罩
+  red: "#c9322d",           // 大红：剪纸物资
+  gold: "#d9a441",          // 金：宝箱、子弹、特效、设备描边
+  black: "#1f1f1f",         // 黑：描边、设备剪影、文字
+  river: "#7fb4c8",         // 湖水蓝：河面
+  river_deep: "#4f8aa3",    // 深湖水蓝：河岸线、漩涡
+  ripple: "#dcecf2",        // 浅湖水蓝：水面波纹
+  grass: "#9cbb7a",         // 草地绿：河岸
+  grass_light: "#d8e2c4",   // 浅草绿：网格
+  dim: "#8a8170",           // 灰米色：次要文字
+};
+
 // ============ 绘制总入口 ============
 // 每一帧：按图层顺序依次绘制（后画的盖在先画的上面）
 function draw() {
@@ -36,14 +53,14 @@ function draw() {
 
 // ============ 图层1：背景 ============
 function draw_background() {
-  ctx.fillStyle = "#ffffff";
+  ctx.fillStyle = PALETTE.paper;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
 // ============ 图层2：网格 ============
 // 浅灰细线画出所有格子，暗示"可以建塔的位置"
 function draw_grid() {
-  ctx.strokeStyle = "#e0e0e0";
+  ctx.strokeStyle = PALETTE.grass_light;
   ctx.lineWidth = 1;
   for (let col = 1; col < GRID.cols; col++) {
     line(col * GRID.cell, 0, col * GRID.cell, canvas.height);
@@ -66,7 +83,7 @@ function draw_river() {
 
   // 上游标记：动态跟随当前河道的入口（入口拐点在屏幕外，往回取一点进画面）
   const entry = river_entry_position();
-  ctx.fillStyle = "#111111";
+  ctx.fillStyle = PALETTE.black;
   ctx.font = "13px sans-serif";
   ctx.textAlign = "center";
   ctx.fillText("上游", entry.x, entry.y - 18);
@@ -112,16 +129,24 @@ function draw_river_segment(a, b) {
   const nx = ox / half;                     // 垂直河向单位向量 x（长 1 像素）
   const ny = oy / half;                     // 垂直河向单位向量 y（长 1 像素）
 
-  // 水面（浅灰蓝底）
-  ctx.strokeStyle = "#eef3f6";
+  // 草地河岸：先画一条比河面宽的绿带，露出的部分就是两岸草地
+  ctx.strokeStyle = PALETTE.grass;
+  ctx.lineWidth = half * 2 + 16;
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+
+  // 水面（湖水蓝）
+  ctx.strokeStyle = PALETTE.river;
   ctx.lineWidth = half * 2;
   ctx.beginPath();
   ctx.moveTo(a.x, a.y);
   ctx.lineTo(b.x, b.y);
   ctx.stroke();
 
-  // 两条黑色河岸
-  ctx.strokeStyle = "#111111";
+  // 两条深湖水蓝岸线
+  ctx.strokeStyle = PALETTE.river_deep;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(a.x + ox, a.y + oy);
@@ -136,7 +161,7 @@ function draw_river_segment(a, b) {
   // offset 用游戏时间计算并取余，让波纹周而复始地流动
   const spacing = 22;                       // 波纹间距（像素）
   const offset = (game.last_time / 400) % spacing;
-  ctx.strokeStyle = "#999999";
+  ctx.strokeStyle = PALETTE.ripple;
   ctx.lineWidth = 1;
   const wave_count = Math.floor((len + spacing) / spacing);
   for (let i = 0; i < wave_count; i++) {
@@ -155,7 +180,7 @@ function draw_river_segment(a, b) {
 // 漩涡：三层错开相位的圆弧持续旋转，形成"吸水"的视觉效果
 function draw_whirlpool(cx, cy) {
   const phase = (game.last_time / 300) % (Math.PI * 2);   // 持续旋转的相位
-  ctx.strokeStyle = "#111111";
+  ctx.strokeStyle = PALETTE.river_deep;
   for (let i = 0; i < 3; i++) {
     const radius = 6 + i * 7;               // 由内到外三层
     ctx.lineWidth = i === 0 ? 1.5 : 2;
@@ -175,7 +200,7 @@ function draw_hover() {
   if (!cell) return;
   const occupied = path_cells.has(cell.col + "," + cell.row)
     || game.towers.some(function (t) { return t.col === cell.col && t.row === cell.row; });
-  ctx.fillStyle = occupied ? "rgba(200, 0, 0, 0.15)" : "rgba(0, 0, 0, 0.08)";
+  ctx.fillStyle = occupied ? "rgba(201, 50, 45, 0.20)" : "rgba(156, 187, 122, 0.40)";
   ctx.fillRect(cell.col * GRID.cell, cell.row * GRID.cell, GRID.cell, GRID.cell);
 }
 
@@ -195,8 +220,9 @@ function draw_tower(tower) {
   ctx.save();
   ctx.translate(cx, cy);
 
-  ctx.strokeStyle = "#111111";
-  ctx.fillStyle = "#ffffff";
+  // 剪纸风：设备为黑色剪影 + 金色描边
+  ctx.strokeStyle = PALETTE.gold;
+  ctx.fillStyle = PALETTE.black;
   ctx.lineWidth = 2;
 
   // 岸桩底座（小圆）——所有设备都装在岸桩上
@@ -223,14 +249,14 @@ function draw_tower(tower) {
   // 作业范围圈：半透明灰圆。物资漂进这个圆才会被打捞/被减速
   ctx.beginPath();
   ctx.arc(0, 0, type.range * GRID.cell, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(0, 0, 0, 0.06)";
+  ctx.fillStyle = "rgba(217, 164, 65, 0.08)";
   ctx.fill();
-  ctx.strokeStyle = "rgba(0, 0, 0, 0.25)";
+  ctx.strokeStyle = "rgba(217, 164, 65, 0.35)";
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  ctx.strokeStyle = "#111111";
-  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = PALETTE.gold;
+  ctx.fillStyle = PALETTE.black;
   ctx.lineWidth = 2;
 
   if (type.id === "frost") {
@@ -343,10 +369,10 @@ function draw_tower(tower) {
     const bar_x = cx - bar_w / 2;
     const bar_y = cy + 12;
     const ratio = Math.max(0, tower.durability / TOWER_DURABILITY);
-    ctx.strokeStyle = "#111111";
+    ctx.strokeStyle = PALETTE.black;
     ctx.lineWidth = 1;
     ctx.strokeRect(bar_x - 1, bar_y - 1, bar_w + 2, bar_h + 2);
-    ctx.fillStyle = "#111111";
+    ctx.fillStyle = PALETTE.gold;
     ctx.fillRect(bar_x, bar_y, bar_w * ratio, bar_h);
   }
 }
@@ -354,7 +380,7 @@ function draw_tower(tower) {
 // ============ 图层6：子弹 ============
 // 黑白线条版子弹：一个小黑点
 function draw_bullets() {
-  ctx.fillStyle = "#111111";
+  ctx.fillStyle = PALETTE.gold;
   for (const bullet of game.bullets) {
     ctx.beginPath();
     ctx.arc(bullet.x, bullet.y, 3, 0, Math.PI * 2);
@@ -369,7 +395,7 @@ function draw_effects() {
     const progress = effect.age / 0.5;          // 0 → 1
     const radius = 6 + progress * 20;           // 扩散
     const alpha = 1 - progress;                 // 淡出
-    ctx.strokeStyle = "rgba(17, 17, 17, " + alpha.toFixed(2) + ")";
+    ctx.strokeStyle = "rgba(217, 164, 65, " + alpha.toFixed(2) + ")";
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
@@ -389,8 +415,9 @@ function draw_enemy(enemy) {
   ctx.save();
   ctx.translate(pos.x, pos.y);
 
-  ctx.strokeStyle = "#111111";
-  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = PALETTE.black;
+  // 剪纸风：物资统一大红色块，宝箱用金色
+  ctx.fillStyle = enemy.type_id === "chest" ? PALETTE.gold : PALETTE.red;
   ctx.lineWidth = 2;
 
   if (enemy.type_id === "grain") {
@@ -434,7 +461,7 @@ function draw_enemy(enemy) {
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = "#111111";
+    ctx.fillStyle = PALETTE.black;
     ctx.beginPath();
     ctx.arc(-3, -1, 1.5, 0, Math.PI * 2);
     ctx.fill();
@@ -485,10 +512,10 @@ function draw_enemy(enemy) {
   const bar_x = pos.x - bar_w / 2;
   const bar_y = pos.y - 22;
   const hp_ratio = Math.max(0, enemy.hp / enemy.max_hp);   // 0~1 的比例
-  ctx.strokeStyle = "#111111";
+  ctx.strokeStyle = PALETTE.black;
   ctx.lineWidth = 1;
   ctx.strokeRect(bar_x - 1, bar_y - 1, bar_w + 2, bar_h + 2);
-  ctx.fillStyle = "#111111";
+  ctx.fillStyle = PALETTE.black;
   ctx.fillRect(bar_x, bar_y, bar_w * hp_ratio, bar_h);
 
   // 状态标记：
@@ -524,7 +551,7 @@ function round_rect(x, y, w, h, r) {
 function draw_hud() {
   const level = LEVELS[game.level_index];
 
-  ctx.fillStyle = "#111111";
+  ctx.fillStyle = PALETTE.black;
   ctx.font = "bold 16px sans-serif";
   ctx.textAlign = "left";
   ctx.fillText("❤️ 生命：" + game.lives, 12, 24);
@@ -550,11 +577,11 @@ function draw_game_over() {
   if (game.state === "playing") return;
 
   // 半透明白色遮罩（盖住战场，突出文字）
-  ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+  ctx.fillStyle = "rgba(250, 245, 234, 0.9)";   // 米白纸色遮罩
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.textAlign = "center";
-  ctx.fillStyle = "#111111";
+  ctx.fillStyle = PALETTE.black;
 
   if (game.state === "won") {
     // 救援成功：大字 + 星级（★★☆ 形式，实心星 = 得到，空心星 = 失去）
@@ -567,7 +594,7 @@ function draw_game_over() {
       canvas.height / 2 + 25
     );
     ctx.font = "20px sans-serif";
-    ctx.fillStyle = "#555555";
+    ctx.fillStyle = PALETTE.dim;
     if (game.level_index + 1 < LEVELS.length) {
       ctx.fillText("点击进入第 " + (game.level_index + 2) + " 关", canvas.width / 2, canvas.height / 2 + 65);
     } else {
@@ -577,7 +604,7 @@ function draw_game_over() {
     ctx.font = "bold 48px sans-serif";
     ctx.fillText("💀 救援失败", canvas.width / 2, canvas.height / 2 - 20);
     ctx.font = "20px sans-serif";
-    ctx.fillStyle = "#555555";
+    ctx.fillStyle = PALETTE.dim;
     ctx.fillText("点击重试第 " + (game.level_index + 1) + " 关", canvas.width / 2, canvas.height / 2 + 30);
   }
 }
