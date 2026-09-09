@@ -132,7 +132,7 @@ function draw_river_corner(prev, corner, next) {
   // 草地圆盘（先画，垫在底下，比水面宽一圈）
   ctx.fillStyle = PALETTE.grass;
   ctx.beginPath();
-  ctx.arc(corner.x, corner.y, half + 8, 0, Math.PI * 2);
+  ctx.arc(corner.x, corner.y, half + 16, 0, Math.PI * 2);
   ctx.fill();
 
   // 水面圆盘
@@ -185,7 +185,7 @@ function draw_river_segment(a, b) {
 
   // 草地河岸：先画一条比河面宽的绿带，露出的部分就是两岸草地
   ctx.strokeStyle = PALETTE.grass;
-  ctx.lineWidth = half * 2 + 16;
+  ctx.lineWidth = half * 2 + 32;
   ctx.beginPath();
   ctx.moveTo(a.x, a.y);
   ctx.lineTo(b.x, b.y);
