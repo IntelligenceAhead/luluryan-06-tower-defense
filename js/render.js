@@ -97,7 +97,7 @@ function draw_river() {
   // 下游漩涡：动态跟随当前河道的出口，物资漂到这里就被吞掉
   const exit_pos = whirlpool_position();
   draw_whirlpool(exit_pos.x, exit_pos.y);
-  ctx.fillText("漩涡", exit_pos.x, exit_pos.y + 28);
+  ctx.fillText("漩涡", exit_pos.x, exit_pos.y + 44);
 }
 
 // 上游标记位置：取第一段河上、距入口 30 像素的点（确保在画面内）
@@ -231,18 +231,30 @@ function draw_river_segment(a, b) {
   }
 }
 
-// 漩涡：三层错开相位的圆弧持续旋转，形成"吸水"的视觉效果
+// 漩涡：5 层螺旋 + 红色警示脉冲，制造"危险终点"的紧张感
 function draw_whirlpool(cx, cy) {
-  const phase = (game.last_time / 300) % (Math.PI * 2);   // 持续旋转的相位
-  ctx.strokeStyle = PALETTE.river_deep;
-  for (let i = 0; i < 3; i++) {
-    const radius = 6 + i * 7;               // 由内到外三层
-    ctx.lineWidth = i === 0 ? 1.5 : 2;
-    const start = phase + i * 2.1;          // 每层错开相位
+  const phase = (game.last_time / 180) % (Math.PI * 2);   // 转得比水纹快
+
+  // 螺旋弧：由内到外 5 层，半径渐大、相位渐错，内圈用大红（危险）
+  for (let i = 0; i < 5; i++) {
+    const radius = 5 + i * 7;               // 5 → 33
+    ctx.lineWidth = i < 2 ? 2 : 2.5;
+    ctx.strokeStyle = i === 0 ? PALETTE.red : PALETTE.black;
+    const start = phase + i * 1.9;          // 每层错开相位
     ctx.beginPath();
-    ctx.arc(cx, cy, radius, start, start + Math.PI * 1.5);
+    ctx.arc(cx, cy, radius, start, start + Math.PI * 1.6);
     ctx.stroke();
   }
+
+  // 红色警示脉冲：一圈红环按呼吸节奏放大淡出（0.9 秒一个周期）
+  const pulse = (game.last_time / 900) % 1;
+  const pr = 30 + pulse * 10;               // 半径 30 → 40
+  const alpha = 1 - pulse;
+  ctx.strokeStyle = "rgba(201, 50, 45, " + alpha.toFixed(2) + ")";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, pr, 0, Math.PI * 2);
+  ctx.stroke();
 }
 
 // ============ 图层4：悬停预览 ============
