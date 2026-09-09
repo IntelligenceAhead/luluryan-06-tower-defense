@@ -19,6 +19,7 @@
     <!-- 设备库面板：游戏区外，显示 5 种打捞设备供点选（卡片由 render.js 自动生成） -->
     <aside id="shopPanel">
       <h2>⚓ 设备库</h2>
+      <button id="levelSelectButton" class="menu-btn">🗺️ 选关</button>
       <div id="goldDisplay" class="gold">💰 金币：300</div>
       <div id="towerCards"></div>
       <p class="hint">点击卡片选择设备（或按键盘 1~5），再点击岸边空地部署</p>
@@ -27,6 +28,15 @@
 
   <!-- 状态栏：显示部署结果（成功/失败原因） -->
   <p id="statusMessage" class="hint">🖱️ 点击岸边部署设备 · 点击已有设备可维修（设备会磨损） · 通关解锁下一关（自动存档）</p>
+
+  <!-- 选关界面：默认显示，进入关卡后隐藏 -->
+  <div id="levelSelect" class="overlay">
+    <div class="level-panel">
+      <h2>🏞 选择关卡</h2>
+      <div id="levelButtons"></div>
+      <p class="hint">通关解锁下一关 · 已解锁关卡可随时重玩刷星</p>
+    </div>
+  </div>
 
   <!-- 注意加载顺序：先逻辑（game.js），再美术（render.js） -->
   <script src="js/game.js"></script>

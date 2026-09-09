@@ -662,9 +662,9 @@ function draw_game_over() {
     ctx.font = "20px sans-serif";
     ctx.fillStyle = PALETTE.dim;
     if (game.level_index + 1 < LEVELS.length) {
-      ctx.fillText("点击进入第 " + (game.level_index + 2) + " 关", canvas.width / 2, canvas.height / 2 + 65);
+      ctx.fillText("点击返回选关（第 " + (game.level_index + 2) + " 关已解锁）", canvas.width / 2, canvas.height / 2 + 65);
     } else {
-      ctx.fillText("🏆 全部通关！点击回到第 1 关", canvas.width / 2, canvas.height / 2 + 65);
+      ctx.fillText("🏆 全部通关！点击返回选关", canvas.width / 2, canvas.height / 2 + 65);
     }
   } else {
     ctx.font = "bold 48px sans-serif";
@@ -692,6 +692,52 @@ function event_to_canvas(event) {
     y: (event.clientY - rect.top) * (canvas.height / rect.height),
   };
 }
+
+// ============ 选关界面（DOM） ============
+const level_select = document.getElementById("levelSelect");
+const level_buttons_container = document.getElementById("levelButtons");
+
+// 按 LEVELS 表生成 10 个关卡按钮：解锁的显示星级可点击，未解锁显示 🔒
+function build_level_select() {
+  level_buttons_container.innerHTML = "";
+  LEVELS.forEach(function (level, i) {
+    const btn = document.createElement("button");
+    btn.className = "level-btn";
+    const unlocked = i <= game.unlocked_level;
+    const stars = game.level_stars[i] || 0;
+    const river = RIVERS.find(function (r) { return r.id === level.river; });
+    btn.innerHTML =
+      (unlocked ? "" : "🔒 ") + "第 " + (i + 1) + " 关 · " + river.name +
+      '<div class="stars">' +
+      (unlocked ? "★★★".slice(0, stars) + "☆☆☆".slice(0, 3 - stars) : "···") +
+      "</div>";
+    if (!unlocked) {
+      btn.classList.add("locked");
+    } else {
+      btn.addEventListener("click", function () {
+        show_level_select(false);
+        start_level(i);
+        status_text.textContent = "🚣 第 " + (i + 1) + " 关开始！";
+      });
+    }
+    level_buttons_container.appendChild(btn);
+  });
+}
+
+// 显示/隐藏选关界面（显示时冻结游戏并刷新星级与解锁状态）
+function show_level_select(visible) {
+  level_select.classList.toggle("hidden", !visible);
+  if (visible) {
+    game.state = "menu";
+    build_level_select();
+  }
+}
+
+// 设备库里的"选关"按钮：随时暂停回选关
+document.getElementById("levelSelectButton").addEventListener("click", function () {
+  show_level_select(true);
+  status_text.textContent = "🗺️ 已暂停，选择要玩的关卡";
+});
 
 // ============ 塔仓面板（DOM 界面） ============
 // 游戏区外的"仓库"：显示 5 种塔，鼠标点选，再回地图上建造。
@@ -763,14 +809,10 @@ canvas.addEventListener("mouseleave", function () {
 // 点击：游戏结束时点击 = 进下一关/重试本关；游戏中点击 = 尝试部署设备
 canvas.addEventListener("click", function (event) {
   if (game.state !== "playing") {
-    const was_won = game.state === "won";
-    const has_next = game.level_index + 1 < LEVELS.length;
-    if (was_won && has_next) {
-      start_level(game.level_index + 1);
-      status_text.textContent = "🚣 进入第 " + (game.level_index + 1) + " 关！";
-    } else if (was_won && !has_next) {
-      start_level(0);   // 全部通关：回到第 1 关，开始新的旅程
-      status_text.textContent = "🏆 全部通关！从第 1 关开始新的旅程";
+    if (game.state === "won") {
+      // 胜利：回到选关界面（星级和解锁状态已存档并刷新）
+      show_level_select(true);
+      status_text.textContent = "🎉 第 " + (game.level_index + 1) + " 关完成！";
     } else {
       start_level(game.level_index);
       status_text.textContent = "🔄 重试第 " + (game.level_index + 1) + " 关";
@@ -803,6 +845,9 @@ canvas.addEventListener("click", function (event) {
     status_text.textContent = "❌ " + error;
   }
 });
+
+// 页面加载：构建选关界面（游戏初始状态为 menu，等待玩家点选关卡）
+build_level_select();
 
 // ============ 游戏主循环 ============
 // requestAnimationFrame：浏览器每秒钟自动调用约 60 次。

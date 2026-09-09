@@ -112,3 +112,81 @@ canvas {
   color: #8a8170;
   font-size: 13px;
 }
+
+/* ============ 选关界面 ============ */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(242, 234, 216, 0.96);   /* 纸色遮罩 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.level-panel {
+  background: #faf5ea;
+  border: 2px solid #1f1f1f;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  padding: 24px;
+  width: 500px;
+  text-align: center;
+}
+
+.level-panel h2 {
+  margin: 0 0 12px;
+  color: #c9322d;
+  letter-spacing: 4px;
+}
+
+#levelButtons {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+
+.level-btn {
+  border: 2px solid #d8d0be;
+  background: #fffdf7;
+  padding: 10px 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+  color: #1f1f1f;
+}
+
+.level-btn:hover {
+  border-color: #d9a441;
+}
+
+.level-btn.locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.level-btn .stars {
+  letter-spacing: 2px;
+  margin-top: 2px;
+}
+
+/* 设备库里的选关按钮 */
+.menu-btn {
+  display: block;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 6px;
+  border: 2px solid #1f1f1f;
+  background: #faf5ea;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.menu-btn:hover {
+  border-color: #d9a441;
+}

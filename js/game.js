@@ -771,10 +771,10 @@ function update_game(delta_time) {
   game.effects = game.effects.filter(function (e) { return e.age < 0.5; });
 }
 
-// 游戏启动：读取存档，从"已解锁的最新一关"开始
+// 游戏启动：读取存档，停在选关界面（关卡由玩家点选）
 const saved = load_save();
 if (saved) {
   game.unlocked_level = saved.unlocked || 0;
   game.level_stars = saved.stars || {};
 }
-start_level(Math.min(game.unlocked_level, LEVELS.length - 1));
+game.state = "menu";   // menu = 选关界面（游戏冻结，等玩家选关）
