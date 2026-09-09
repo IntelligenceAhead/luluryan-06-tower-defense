@@ -81,6 +81,12 @@ function draw_river() {
     draw_river_segment(points[i], points[i + 1]);
   }
 
+  // 拐角补圆：每段河是独立画的，转弯处会露出断点。
+  // 在内部拐角补"草地圆盘 + 水面圆盘"，让转弯连续成真正的河湾
+  for (let i = 1; i < points.length - 1; i++) {
+    draw_river_corner(points[i - 1], points[i], points[i + 1]);
+  }
+
   // 上游标记：动态跟随当前河道的入口（入口拐点在屏幕外，往回取一点进画面）
   const entry = river_entry_position();
   ctx.fillStyle = PALETTE.black;
@@ -114,6 +120,54 @@ function whirlpool_position() {
   const len = Math.hypot(dx, dy);
   const t = Math.max(0, len - 26) / len;
   return { x: a.x + dx * t, y: a.y + dy * t };
+}
+
+// 河道拐角：在转弯处补圆盘，让两段河连续衔接
+function draw_river_corner(prev, corner, next) {
+  const half = GRID.cell * 0.35;
+  // 两段的垂直偏移向量（长 = 半河宽）
+  const o1 = perpendicular_offset(prev, corner);
+  const o2 = perpendicular_offset(corner, next);
+
+  // 草地圆盘（先画，垫在底下，比水面宽一圈）
+  ctx.fillStyle = PALETTE.grass;
+  ctx.beginPath();
+  ctx.arc(corner.x, corner.y, half + 8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 水面圆盘
+  ctx.fillStyle = PALETTE.river;
+  ctx.beginPath();
+  ctx.arc(corner.x, corner.y, half, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 两侧岸线在拐角的衔接：短直线 + 端点小圆，盖住两段岸线的接头
+  ctx.strokeStyle = PALETTE.river_deep;
+  ctx.fillStyle = PALETTE.river_deep;
+  ctx.lineWidth = 2;
+  for (const side of [1, -1]) {
+    const p1 = { x: corner.x + o1.x * side, y: corner.y + o1.y * side };
+    const p2 = { x: corner.x + o2.x * side, y: corner.y + o2.y * side };
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(p1.x, p1.y, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(p2.x, p2.y, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// 垂直偏移向量（方向垂直于河段，长度 = 半河宽）
+function perpendicular_offset(a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy);
+  const half = GRID.cell * 0.35;
+  return { x: (-dy / len) * half, y: (dx / len) * half };
 }
 
 // 画一段河：浅色水面 + 两条河岸 + 沿流向漂移的水纹（动画）
