@@ -365,7 +365,7 @@ function repair_tower(tower) {
 //   regen < 0（小动物）：生命衰亡（hp 下降），归零 = 溺亡，救援失败
 const SUPPLY_TYPES = [
   { id: "grain",   name: "粮袋",   hp: 120, speed: 80,  reward: 45,  regen: 0,  desc: "生存类，成群漂流" },
-  { id: "animal",  name: "小动物", hp: 60,  speed: 150, reward: 35,  regen: -5, desc: "生命类，挣扎求生，不及时救会溺亡" },
+  { id: "animal",  name: "小动物", hp: 60,  speed: 150, reward: 35,  regen: -7, desc: "生命类，挣扎求生，不及时救会溺亡" },
   { id: "toolbox", name: "工具箱", hp: 300, speed: 60,  reward: 80,  regen: 0,  desc: "工具类，沉重难捞" },
   { id: "scroll",  name: "书卷",   hp: 150, speed: 80,  reward: 60,  regen: 5,  desc: "知识类，遇水进度倒扣" },
   { id: "chest",   name: "宝箱",   hp: 250, speed: 100, reward: 105, regen: 0,  desc: "财富类，高价值压轴" },
