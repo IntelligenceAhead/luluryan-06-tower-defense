@@ -831,6 +831,7 @@ canvas.addEventListener("click", function (event) {
     const type = tower_type(existing);
     if (err === null) {
       status_text.textContent = "🔧 " + type.name + "维修完成（剩余 " + game.gold + " 金币）";
+      audio.play("repair");   // 维修音效（直接播放，不等下一帧对比）
     } else {
       status_text.textContent = "❌ " + err;
     }
@@ -857,6 +858,7 @@ function game_loop(now) {
   game.last_time = now;
 
   update_game(delta_time);   // 先算（逻辑）
+  audio.watch();             // 再听（音频：对比快照检测事件）
   draw();                    // 再画（美术）
   refresh_shop();            // 再刷新塔仓面板（金币变了、卡片选中态）
 
